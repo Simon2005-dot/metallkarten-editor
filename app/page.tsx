@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import JSZip from 'jszip';
 
@@ -62,6 +62,19 @@ type GuideLine =
   | { type: 'vertical'; x: number }
   | { type: 'horizontal'; y: number };
 
+type PreparedQrField = QrField & { qrMatrix?: boolean[][] | null };
+type PreparedField = TextField | LogoField | PreparedQrField;
+
+type CardDesign = {
+  id: string;
+  name: string;
+  cardFinish: CardFinishKey;
+  showFrontQr: boolean;
+  showBackQr: boolean;
+  frontFields: Field[];
+  backFields: Field[];
+};
+
 const CARD_WIDTH = 85.6;
 const CARD_HEIGHT = 53.98;
 const PX_PER_MM = 7;
@@ -71,6 +84,7 @@ const SAFE_MARGIN_MM = 3;
 const SAFE_MARGIN = SAFE_MARGIN_MM * PX_PER_MM;
 const DEFAULT_TEXT_COLOR = '#000000';
 const SNAP_THRESHOLD = 6;
+const GRID_SIZE = 4;
 
 const CARD_BACKGROUNDS: Record<CardFinishKey, string> = {
   black: '/card-backgrounds/black.png',
@@ -229,6 +243,10 @@ function pxToMm(px: number) {
   return px / PX_PER_MM;
 }
 
+function roundToGrid(value: number) {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+}
+
 function escapeXml(str = '') {
   return str
     .replace(/&/g, '&amp;')
@@ -255,6 +273,29 @@ function normalizeQrValue(value: string) {
   if (/^https?:\/\//i.test(raw)) return raw;
   if (/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(\/.*)?$/i.test(raw)) return `https://${raw}`;
   return raw;
+}
+
+function buildUniqueId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function cloneFields(fields: Field[]): Field[] {
+  return fields.map((field) => ({
+    ...field,
+    id: buildUniqueId(field.id),
+  }));
+}
+
+function createNewCardDesign(index = 1): CardDesign {
+  return {
+    id: buildUniqueId('card'),
+    name: `Karte ${index}`,
+    cardFinish: 'black',
+    showFrontQr: true,
+    showBackQr: true,
+    frontFields: cloneFields(frontDefaultFields),
+    backFields: cloneFields(backDefaultFields),
+  };
 }
 
 async function buildQrMatrix(text: string): Promise<boolean[][] | null> {
@@ -328,8 +369,12 @@ function textToSvg(field: TextField) {
     .join('');
 }
 
-function qrSvgGroup(field: QrField, matrix: boolean[][] | null | undefined) {
-  const qrMatrix = matrix && matrix.length > 0 ? matrix : fallbackQrMatrix(field.text || 'placeholder');
+function qrSvgGroup(field: PreparedQrField) {
+  const qrMatrix =
+    field.qrMatrix && field.qrMatrix.length > 0
+      ? field.qrMatrix
+      : fallbackQrMatrix(field.text || 'placeholder');
+
   const moduleSize = field.size / qrMatrix.length;
   const { offset, size } = getQrModuleRect(moduleSize);
   let rects = '';
@@ -358,6 +403,103 @@ function fieldBounds(field: Field) {
   const width = Math.max(40, maxChars * field.fontSize * 0.62);
   const height = Math.max(lines.length, 1) * field.fontSize * 1.35;
   return { width, height };
+}
+
+function duplicateField(field: Field): Field {
+  return {
+    ...field,
+    id: buildUniqueId(field.id),
+    label: `${field.label} Kopie`,
+    x: field.x + 16,
+    y: field.y + 16,
+  };
+}
+
+function ensureBlackText(fields: Field[]) {
+  return fields.map((field) => {
+    if (field.type === 'text' || field.type === 'multiline') {
+      return { ...field, color: DEFAULT_TEXT_COLOR };
+    }
+    return field;
+  });
+}
+
+async function normalizeLogoForExport(src: string) {
+  if (!src || src.startsWith('data:')) return src;
+
+  try {
+    const response = await fetch(src, { mode: 'cors' });
+    const blob = await response.blob();
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || src));
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return src;
+  }
+}
+
+async function prepareFieldsForExport(fields: Field[]): Promise<PreparedField[]> {
+  return Promise.all(
+    ensureBlackText(fields).map(async (field) => {
+      if (field.type === 'logo') {
+        const exportSrc = await normalizeLogoForExport(field.exportSrc || field.src);
+        return { ...field, exportSrc };
+      }
+
+      if (field.type === 'qr') {
+        const normalizedText = normalizeQrValue(field.text);
+        const qrMatrix = await buildQrMatrix(normalizedText || 'placeholder');
+        return { ...field, text: normalizedText, qrMatrix };
+      }
+
+      return field;
+    }),
+  );
+}
+
+function exportSideSvg(
+  fields: PreparedField[],
+  includeGuide: boolean,
+  meta: { orderNumber: string; side: Side; cardName: string },
+) {
+  const content = fields
+    .map((field) => {
+      if (field.type === 'text' || field.type === 'multiline') return textToSvg(field);
+      if (field.type === 'qr') return qrSvgGroup(field);
+      if (field.type === 'logo') return logoToSvg(field);
+      return '';
+    })
+    .join('\n');
+
+  const guide = includeGuide
+    ? `
+      <rect x="1" y="1" width="${STAGE_W - 2}" height="${STAGE_H - 2}" fill="none" stroke="#ff00aa" stroke-width="1" />
+      <rect x="${SAFE_MARGIN}" y="${SAFE_MARGIN}" width="${STAGE_W - SAFE_MARGIN * 2}" height="${STAGE_H - SAFE_MARGIN * 2}" fill="none" stroke="#ff00aa" stroke-dasharray="6 4" stroke-width="1" />
+      <line x1="${STAGE_W / 2}" y1="0" x2="${STAGE_W / 2}" y2="${STAGE_H}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
+      <line x1="0" y1="${STAGE_H / 2}" x2="${STAGE_W}" y2="${STAGE_H / 2}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
+    `
+    : '';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="${CARD_WIDTH}mm" height="${CARD_HEIGHT}mm"
+     viewBox="0 0 ${STAGE_W} ${STAGE_H}">
+  <title>${escapeXml(meta.cardName)} - ${escapeXml(meta.side)}</title>
+  <desc>
+    Bestellnummer: ${escapeXml(meta.orderNumber)}
+    | Seite: ${escapeXml(meta.side)}
+    | Kartenname: ${escapeXml(meta.cardName)}
+  </desc>
+  <metadata>
+    {"orderNumber":"${escapeXml(meta.orderNumber)}","side":"${escapeXml(meta.side)}"}
+  </metadata>
+  ${guide}
+  ${content}
+</svg>`;
 }
 
 function getTextBaselines(field: TextField, y: number) {
@@ -476,104 +618,6 @@ function snapPositionToOtherFields(
   };
 }
 
-function duplicateField(field: Field): Field {
-  const newId = `${field.id}-copy-${Date.now()}`;
-  return {
-    ...field,
-    id: newId,
-    label: `${field.label} Kopie`,
-    x: field.x + 16,
-    y: field.y + 16,
-  };
-}
-
-function ensureBlackText(fields: Field[]) {
-  return fields.map((field) => {
-    if (field.type === 'text' || field.type === 'multiline') {
-      return { ...field, color: DEFAULT_TEXT_COLOR };
-    }
-    return field;
-  });
-}
-
-async function normalizeLogoForExport(src: string) {
-  if (!src || src.startsWith('data:')) return src;
-
-  try {
-    const response = await fetch(src, { mode: 'cors' });
-    const blob = await response.blob();
-
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(String(reader.result || src));
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return src;
-  }
-}
-
-async function prepareFieldsForExport(fields: Field[]) {
-  return Promise.all(
-    ensureBlackText(fields).map(async (field) => {
-      if (field.type === 'logo') {
-        const exportSrc = await normalizeLogoForExport(field.exportSrc || field.src);
-        return { ...field, exportSrc };
-      }
-
-      if (field.type === 'qr') {
-        const normalizedText = normalizeQrValue(field.text);
-        const qrMatrix = await buildQrMatrix(normalizedText || 'placeholder');
-        return { ...field, text: normalizedText, qrMatrix };
-      }
-
-      return field;
-    }),
-  );
-}
-
-function exportSideSvg(
-  fields: Array<Field & { qrMatrix?: boolean[][] | null }>,
-  includeGuide: boolean,
-  meta: { orderNumber: string; side: Side; cardName: string },
-) {
-  const content = fields
-    .map((field) => {
-      if (field.type === 'text' || field.type === 'multiline') return textToSvg(field);
-      if (field.type === 'qr') return qrSvgGroup(field, field.qrMatrix);
-      if (field.type === 'logo') return logoToSvg(field);
-      return '';
-    })
-    .join('\n');
-
-  const guide = includeGuide
-    ? `
-      <rect x="1" y="1" width="${STAGE_W - 2}" height="${STAGE_H - 2}" fill="none" stroke="#ff00aa" stroke-width="1" />
-      <rect x="${SAFE_MARGIN}" y="${SAFE_MARGIN}" width="${STAGE_W - SAFE_MARGIN * 2}" height="${STAGE_H - SAFE_MARGIN * 2}" fill="none" stroke="#ff00aa" stroke-dasharray="6 4" stroke-width="1" />
-      <line x1="${STAGE_W / 2}" y1="0" x2="${STAGE_W / 2}" y2="${STAGE_H}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
-      <line x1="0" y1="${STAGE_H / 2}" x2="${STAGE_W}" y2="${STAGE_H / 2}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
-    `
-    : '';
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="${CARD_WIDTH}mm" height="${CARD_HEIGHT}mm"
-     viewBox="0 0 ${STAGE_W} ${STAGE_H}">
-  <title>${escapeXml(meta.cardName)} - ${escapeXml(meta.side)}</title>
-  <desc>
-    Bestellnummer: ${escapeXml(meta.orderNumber)}
-    | Seite: ${escapeXml(meta.side)}
-    | Kartenname: ${escapeXml(meta.cardName)}
-  </desc>
-  <metadata>
-    {"orderNumber":"${escapeXml(meta.orderNumber)}","side":"${escapeXml(meta.side)}"}
-  </metadata>
-  ${guide}
-  ${content}
-</svg>`;
-}
-
 function Panel({
   title,
   children,
@@ -605,15 +649,34 @@ function Panel({
   );
 }
 
+function SelectionBadge({ width, height }: { width: number; height: number }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: -2,
+        bottom: -22,
+        fontSize: 11,
+        background: '#4f46e5',
+        color: '#fff',
+        borderRadius: 999,
+        padding: '2px 8px',
+      }}
+    >
+      {pxToMm(width).toFixed(1)} × {pxToMm(height).toFixed(1)} mm
+    </div>
+  );
+}
+
 export default function MetallkartenEditor() {
-  const [frontFields, setFrontFields] = useState<Field[]>(frontDefaultFields);
-  const [backFields, setBackFields] = useState<Field[]>(backDefaultFields);
+  const initialCard = useMemo(() => createNewCardDesign(1), []);
+  const [cards, setCards] = useState<CardDesign[]>([initialCard]);
+  const [activeCardId, setActiveCardId] = useState<string>(initialCard.id);
   const [side, setSide] = useState<Side>('front');
-  const [selectedId, setSelectedId] = useState<string>('name');
+  const [selectedId, setSelectedId] = useState<string>(initialCard.frontFields[0]?.id || '');
   const [dragging, setDragging] = useState<DragState>(null);
   const [resizing, setResizing] = useState<ResizeState>(null);
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
-  const [cardName, setCardName] = useState<string>('metallkarte');
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [showSafeArea, setShowSafeArea] = useState<boolean>(true);
   const [snapToGrid, setSnapToGrid] = useState<boolean>(true);
@@ -621,40 +684,78 @@ export default function MetallkartenEditor() {
   const [pasteMessage, setPasteMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false);
   const [previewMode, setPreviewMode] = useState<'design' | 'laser'>('design');
-  const [showFrontQr, setShowFrontQr] = useState<boolean>(true);
-  const [showBackQr, setShowBackQr] = useState<boolean>(true);
   const [activeSection, setActiveSection] = useState<'setup' | 'elements' | 'selected' | 'export'>(
     'setup',
   );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [cardFinish, setCardFinish] = useState<CardFinishKey>('black');
   const [qrMatrices, setQrMatrices] = useState<Record<string, boolean[][]>>({});
 
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const activeCard = cards.find((card) => card.id === activeCardId) || cards[0];
 
-  const fields = side === 'front' ? frontFields : backFields;
+  const fields = side === 'front' ? activeCard.frontFields : activeCard.backFields;
   const visibleFields = fields.filter((field) => {
-    if (field.id === 'qr-front') return showFrontQr;
-    if (field.id === 'back-qr') return showBackQr;
+    if (field.type !== 'qr') return true;
+    const isFrontQr = field.label.toLowerCase().includes('vorder') || field.id.includes('qr-front');
+    const isBackQr = field.label.toLowerCase().includes('rück') || field.id.includes('back-qr');
+    if (isFrontQr) return activeCard.showFrontQr;
+    if (isBackQr) return activeCard.showBackQr;
     return true;
   });
-  const setFields = side === 'front' ? setFrontFields : setBackFields;
+
   const selected = fields.find((f) => f.id === selectedId) || null;
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
   const canExport = cleanOrderNumber.length >= 4;
-  const previewTextColor = getLaserColor(cardFinish, side);
-  const currentBackground = CARD_BACKGROUNDS[cardFinish];
-  const frameStyle = CARD_FRAME_STYLES[cardFinish];
+  const previewTextColor = getLaserColor(activeCard.cardFinish, side);
+  const currentBackground = CARD_BACKGROUNDS[activeCard.cardFinish];
+  const frameStyle = CARD_FRAME_STYLES[activeCard.cardFinish];
+  const protectedIds = fields.slice(0, 5).map((f) => f.id);
+
+  const updateActiveCard = (patch: Partial<CardDesign>) => {
+    setCards((current) =>
+      current.map((card) => (card.id === activeCardId ? { ...card, ...patch } : card)),
+    );
+  };
+
+  const updateActiveCardFields = (sideToUpdate: Side, updater: (fields: Field[]) => Field[]) => {
+    setCards((current) =>
+      current.map((card) => {
+        if (card.id !== activeCardId) return card;
+
+        return {
+          ...card,
+          frontFields: sideToUpdate === 'front' ? updater(card.frontFields) : card.frontFields,
+          backFields: sideToUpdate === 'back' ? updater(card.backFields) : card.backFields,
+        };
+      }),
+    );
+  };
+
+  const setFields = (updater: React.SetStateAction<Field[]>) => {
+    updateActiveCardFields(side, (currentFields) =>
+      typeof updater === 'function'
+        ? (updater as (prev: Field[]) => Field[])(currentFields)
+        : updater,
+    );
+  };
 
   useEffect(() => {
-    const qrFields = [...frontFields, ...backFields].filter((field): field is QrField => field.type === 'qr');
+    const qrFields = cards
+      .flatMap((card) => [...card.frontFields, ...card.backFields])
+      .filter((field): field is QrField => field.type === 'qr');
+
     let active = true;
 
     const buildMatrices = async () => {
       const entries = await Promise.all(
         qrFields.map(async (field) => {
           const matrix = await buildQrMatrix(field.text || 'placeholder');
-          return [field.id, matrix && matrix.length > 0 ? matrix : fallbackQrMatrix(field.text || 'placeholder')] as const;
+          return [
+            field.id,
+            matrix && matrix.length > 0
+              ? matrix
+              : fallbackQrMatrix(field.text || 'placeholder'),
+          ] as const;
         }),
       );
 
@@ -666,7 +767,7 @@ export default function MetallkartenEditor() {
     return () => {
       active = false;
     };
-  }, [frontFields, backFields]);
+  }, [cards]);
 
   const updateField = (id: string, patch: Partial<Field>) => {
     setFields((current) =>
@@ -680,7 +781,7 @@ export default function MetallkartenEditor() {
   };
 
   const addTextField = () => {
-    const id = `text-${Date.now()}`;
+    const id = buildUniqueId('text');
     const newField: TextField = {
       id,
       type: 'text',
@@ -699,7 +800,7 @@ export default function MetallkartenEditor() {
   };
 
   const addMultilineField = () => {
-    const id = `multi-${Date.now()}`;
+    const id = buildUniqueId('multi');
     const newField: TextField = {
       id,
       type: 'multiline',
@@ -718,7 +819,7 @@ export default function MetallkartenEditor() {
   };
 
   const addQrField = () => {
-    const id = `qr-${Date.now()}`;
+    const id = buildUniqueId('qr');
     const newField: QrField = {
       id,
       type: 'qr',
@@ -733,6 +834,44 @@ export default function MetallkartenEditor() {
     setActiveSection('selected');
   };
 
+  const addNewCard = () => {
+    const newCard = createNewCardDesign(cards.length + 1);
+    setCards((current) => [...current, newCard]);
+    setActiveCardId(newCard.id);
+    setSelectedId(newCard.frontFields[0]?.id || '');
+    setSide('front');
+    setGuideLines([]);
+    setActiveSection('setup');
+  };
+
+  const duplicateActiveCard = () => {
+    const duplicated: CardDesign = {
+      ...activeCard,
+      id: buildUniqueId('card'),
+      name: `${activeCard.name} Kopie`,
+      frontFields: cloneFields(activeCard.frontFields),
+      backFields: cloneFields(activeCard.backFields),
+    };
+
+    setCards((current) => [...current, duplicated]);
+    setActiveCardId(duplicated.id);
+    setSelectedId(duplicated.frontFields[0]?.id || '');
+    setSide('front');
+    setGuideLines([]);
+    setActiveSection('setup');
+  };
+
+  const removeActiveCard = () => {
+    if (cards.length <= 1) return;
+    const remaining = cards.filter((card) => card.id !== activeCardId);
+    const nextCard = remaining[0];
+    setCards(remaining);
+    setActiveCardId(nextCard.id);
+    setSelectedId(nextCard.frontFields[0]?.id || '');
+    setSide('front');
+    setGuideLines([]);
+  };
+
   const loadImageElement = (src: string) =>
     new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
@@ -743,7 +882,7 @@ export default function MetallkartenEditor() {
 
   const addLogoFromSource = async (src: string, filename: string) => {
     const exportSrc = await normalizeLogoForExport(src);
-    const id = `logo-${Date.now()}`;
+    const id = buildUniqueId('logo');
     const newLogo: LogoField = {
       id,
       type: 'logo',
@@ -807,13 +946,31 @@ export default function MetallkartenEditor() {
         ctx.putImageData(imageData, 0, 0);
         const laserReady = canvas.toDataURL('image/png');
 
-        updateField(id, {
-          src: laserReady,
-          originalSrc: src,
-          exportSrc: laserReady,
-          removedBackground: true,
-          laserMode: 'laser',
-        });
+        setCards((current) =>
+          current.map((card) => {
+            if (card.id !== activeCardId) return card;
+
+            const update = (list: Field[]) =>
+              list.map((field) =>
+                field.id === id
+                  ? ({
+                      ...field,
+                      src: laserReady,
+                      originalSrc: src,
+                      exportSrc: laserReady,
+                      removedBackground: true,
+                      laserMode: 'laser',
+                    } as LogoField)
+                  : field,
+              );
+
+            return {
+              ...card,
+              frontFields: side === 'front' ? update(card.frontFields) : card.frontFields,
+              backFields: side === 'back' ? update(card.backFields) : card.backFields,
+            };
+          }),
+        );
       } finally {
         setIsProcessingImage(false);
       }
@@ -878,8 +1035,8 @@ export default function MetallkartenEditor() {
         let nextHeight = resizing.startHeight + (pos.y - resizing.startY);
 
         if (snapToGrid) {
-          nextWidth = Math.round(nextWidth / 4) * 4;
-          nextHeight = Math.round(nextHeight / 4) * 4;
+          nextWidth = roundToGrid(nextWidth);
+          nextHeight = roundToGrid(nextHeight);
         }
 
         nextWidth = clamp(nextWidth, 24, STAGE_W - field.x - SAFE_MARGIN);
@@ -895,7 +1052,7 @@ export default function MetallkartenEditor() {
           resizing.startHeight + (pos.y - resizing.startY),
         );
 
-        if (snapToGrid) nextSize = Math.round(nextSize / 4) * 4;
+        if (snapToGrid) nextSize = roundToGrid(nextSize);
 
         const maxSize = Math.min(STAGE_W - field.x - SAFE_MARGIN, STAGE_H - field.y - SAFE_MARGIN);
         nextSize = clamp(nextSize, 48, maxSize);
@@ -916,8 +1073,8 @@ export default function MetallkartenEditor() {
     let y = pos.y - dragging.offsetY;
 
     if (snapToGrid) {
-      x = Math.round(x / 4) * 4;
-      y = Math.round(y / 4) * 4;
+      x = roundToGrid(x);
+      y = roundToGrid(y);
     }
 
     const otherFields = visibleFields.filter((f) => f.id !== field.id);
@@ -948,7 +1105,6 @@ export default function MetallkartenEditor() {
       if (!selected) return;
 
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        const protectedIds = ['name', 'role', 'company', 'contact', 'qr-front', 'back-title', 'back-sub', 'back-qr'];
         if (!protectedIds.includes(selected.id)) removeField(selected.id);
       }
       if (event.key === 'ArrowLeft') {
@@ -999,9 +1155,9 @@ export default function MetallkartenEditor() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('paste', onPaste);
     };
-  }, [selected, fields]);
+  }, [selected, fields, protectedIds]);
 
-  const exportBothSides = async () => {
+  const exportAllCards = async () => {
     if (!canExport || isSubmitting) {
       setActiveSection('setup');
       return;
@@ -1010,38 +1166,50 @@ export default function MetallkartenEditor() {
     try {
       setIsSubmitting(true);
 
-      const visibleFrontFields = frontFields.filter((f) => (f.id === 'qr-front' ? showFrontQr : true));
-      const visibleBackFields = backFields.filter((f) => (f.id === 'back-qr' ? showBackQr : true));
-
-      const [preparedFront, preparedBack] = await Promise.all([
-        prepareFieldsForExport(visibleFrontFields),
-        prepareFieldsForExport(visibleBackFields),
-      ]);
-
-      const frontSvg = exportSideSvg(preparedFront, true, {
-        orderNumber: cleanOrderNumber,
-        side: 'front',
-        cardName,
-      });
-
-      const backSvg = exportSideSvg(preparedBack, true, {
-        orderNumber: cleanOrderNumber,
-        side: 'back',
-        cardName,
-      });
-
-      const safeCardName = sanitizeOrderNumber(cardName) || 'metallkarte';
-      const folderName = `${cleanOrderNumber}-${safeCardName}`;
-
       const zip = new JSZip();
-      zip.file(`${folderName}/${safeCardName}-vorderseite.svg`, frontSvg);
-      zip.file(`${folderName}/${safeCardName}-rueckseite.svg`, backSvg);
+      const rootFolder = cleanOrderNumber;
+
+      for (const card of cards) {
+        const visibleFrontFields = card.frontFields.filter((field) => {
+          if (field.type !== 'qr') return true;
+          const isFrontQr = field.label.toLowerCase().includes('vorder') || field.id.includes('qr-front');
+          return isFrontQr ? card.showFrontQr : true;
+        });
+
+        const visibleBackFields = card.backFields.filter((field) => {
+          if (field.type !== 'qr') return true;
+          const isBackQr = field.label.toLowerCase().includes('rück') || field.id.includes('back-qr');
+          return isBackQr ? card.showBackQr : true;
+        });
+
+        const [preparedFront, preparedBack] = await Promise.all([
+          prepareFieldsForExport(visibleFrontFields),
+          prepareFieldsForExport(visibleBackFields),
+        ]);
+
+        const safeCardName = sanitizeOrderNumber(card.name) || 'metallkarte';
+
+        const frontSvg = exportSideSvg(preparedFront, true, {
+          orderNumber: cleanOrderNumber,
+          side: 'front',
+          cardName: card.name,
+        });
+
+        const backSvg = exportSideSvg(preparedBack, true, {
+          orderNumber: cleanOrderNumber,
+          side: 'back',
+          cardName: card.name,
+        });
+
+        zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-vorderseite.svg`, frontSvg);
+        zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-rueckseite.svg`, backSvg);
+      }
 
       const blob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${folderName}.zip`;
+      a.download = `${cleanOrderNumber}-alle-karten.zip`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -1096,8 +1264,6 @@ export default function MetallkartenEditor() {
     );
   };
 
-  const protectedIds = ['name', 'role', 'company', 'contact', 'qr-front', 'back-title', 'back-sub', 'back-qr'];
-
   return (
     <div
       style={{
@@ -1110,10 +1276,10 @@ export default function MetallkartenEditor() {
     >
       <div
         style={{
-          maxWidth: 1520,
+          maxWidth: 1580,
           margin: '0 auto',
           display: 'grid',
-          gridTemplateColumns: '360px minmax(0, 1fr)',
+          gridTemplateColumns: '380px minmax(0, 1fr)',
           gap: 24,
           alignItems: 'start',
         }}
@@ -1128,6 +1294,8 @@ export default function MetallkartenEditor() {
             gap: 14,
             position: 'sticky',
             top: 20,
+            maxHeight: 'calc(100vh - 40px)',
+            overflow: 'auto',
           }}
         >
           <div
@@ -1143,7 +1311,7 @@ export default function MetallkartenEditor() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              Bitte zuerst deine TikTok-Bestellnummer eingeben, damit dein Design korrekt zugeordnet werden kann.
+              Ein Kunde kann mehrere Karten innerhalb einer Bestellung anlegen und gesammelt exportieren.
             </div>
           </div>
 
@@ -1164,23 +1332,93 @@ export default function MetallkartenEditor() {
             ))}
           </div>
 
+          <Panel title="Bestellung" subtitle="Pflichtangabe für die Zuordnung deiner Dateien">
+            <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+              Alle Karten dieser Bestellung werden gemeinsam in einer ZIP-Datei exportiert.
+            </div>
+            <div>
+              <label>Bestellnummer</label>
+              <input
+                value={orderNumber}
+                onChange={(e) => setOrderNumber(e.target.value)}
+                placeholder="Bestellnummer hier eingeben"
+                style={inputStyle}
+              />
+            </div>
+          </Panel>
+
+          <Panel title="Karten" subtitle="Ein Kunde kann mehrere Karten in einem Auftrag anlegen">
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={addNewCard} style={{ ...buttonStyle, flex: 1 }}>
+                Neue Karte
+              </button>
+              <button onClick={duplicateActiveCard} style={{ ...buttonStyle, flex: 1 }}>
+                Duplizieren
+              </button>
+            </div>
+
+            <button
+              onClick={removeActiveCard}
+              disabled={cards.length <= 1}
+              style={{
+                ...buttonStyle,
+                width: '100%',
+                opacity: cards.length <= 1 ? 0.5 : 1,
+              }}
+            >
+              Aktive Karte löschen
+            </button>
+
+            <div style={{ display: 'grid', gap: 8, maxHeight: 260, overflow: 'auto' }}>
+              {cards.map((card) => (
+                <button
+                  key={card.id}
+                  onClick={() => {
+                    setActiveCardId(card.id);
+                    setSide('front');
+                    setSelectedId(card.frontFields[0]?.id || '');
+                    setGuideLines([]);
+                  }}
+                  style={{
+                    textAlign: 'left',
+                    border: activeCardId === card.id ? '1px solid #111827' : '1px solid #e5e7eb',
+                    background: activeCardId === card.id ? '#eef2ff' : '#fafafa',
+                    borderRadius: 12,
+                    padding: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>{card.name}</div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>
+                    {CARD_LABELS[card.cardFinish]} · {card.frontFields.length + card.backFields.length}{' '}
+                    Elemente
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Panel>
+
           {activeSection === 'setup' && (
             <>
-              <Panel title="Bestellung" subtitle="Pflichtangabe für die Zuordnung deiner Dateien">
-                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                  Die Bestellnummer steht zusätzlich groß über der Vorschau, damit sie sofort sichtbar ist.
-                </div>
-
+              <Panel title="Aktive Karte">
                 <div>
-                  <label>Projektname</label>
-                  <input value={cardName} onChange={(e) => setCardName(e.target.value)} style={inputStyle} />
+                  <label>Kartenname</label>
+                  <input
+                    value={activeCard.name}
+                    onChange={(e) => updateActiveCard({ name: e.target.value })}
+                    style={inputStyle}
+                  />
                 </div>
               </Panel>
 
               <Panel title="Kartenoptik" subtitle="Hier stellst du die Vorschau passend zur echten Metallkarte ein">
                 <div>
                   <label>Kartenfarbe</label>
-                  <select value={cardFinish} onChange={(e) => setCardFinish(e.target.value as CardFinishKey)} style={inputStyle}>
+                  <select
+                    value={activeCard.cardFinish}
+                    onChange={(e) => updateActiveCard({ cardFinish: e.target.value as CardFinishKey })}
+                    style={inputStyle}
+                  >
                     <option value="black">Schwarz</option>
                     <option value="silver">Silber</option>
                     <option value="gold">Gold</option>
@@ -1194,13 +1432,20 @@ export default function MetallkartenEditor() {
 
               <Panel title="Vorschau">
                 <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                  Die Umschaltung zwischen Vorder- und Rückseite befindet sich direkt unter der großen Vorschau rechts.
+                  Das Raster ist standardmäßig ausgeschaltet. Beim Verschieben rasten Elemente an gleichen
+                  Höhen, Kanten und Textlinien ein.
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button onClick={() => setPreviewMode('design')} style={previewMode === 'design' ? activeTabStyle : tabStyle}>
+                  <button
+                    onClick={() => setPreviewMode('design')}
+                    style={previewMode === 'design' ? activeTabStyle : tabStyle}
+                  >
                     Design
                   </button>
-                  <button onClick={() => setPreviewMode('laser')} style={previewMode === 'laser' ? activeTabStyle : tabStyle}>
+                  <button
+                    onClick={() => setPreviewMode('laser')}
+                    style={previewMode === 'laser' ? activeTabStyle : tabStyle}
+                  >
                     Laser
                   </button>
                 </div>
@@ -1209,23 +1454,43 @@ export default function MetallkartenEditor() {
               <Panel title="Ansicht">
                 <label style={toggleRowStyle}>
                   <span>Sicherheitsbereich</span>
-                  <input type="checkbox" checked={showSafeArea} onChange={(e) => setShowSafeArea(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={showSafeArea}
+                    onChange={(e) => setShowSafeArea(e.target.checked)}
+                  />
                 </label>
                 <label style={toggleRowStyle}>
                   <span>Raster anzeigen</span>
-                  <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={showGrid}
+                    onChange={(e) => setShowGrid(e.target.checked)}
+                  />
                 </label>
                 <label style={toggleRowStyle}>
                   <span>Am Raster ausrichten</span>
-                  <input type="checkbox" checked={snapToGrid} onChange={(e) => setSnapToGrid(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={snapToGrid}
+                    onChange={(e) => setSnapToGrid(e.target.checked)}
+                  />
                 </label>
                 <label style={toggleRowStyle}>
                   <span>QR Vorderseite</span>
-                  <input type="checkbox" checked={showFrontQr} onChange={(e) => setShowFrontQr(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={activeCard.showFrontQr}
+                    onChange={(e) => updateActiveCard({ showFrontQr: e.target.checked })}
+                  />
                 </label>
                 <label style={toggleRowStyle}>
                   <span>QR Rückseite</span>
-                  <input type="checkbox" checked={showBackQr} onChange={(e) => setShowBackQr(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={activeCard.showBackQr}
+                    onChange={(e) => updateActiveCard({ showBackQr: e.target.checked })}
+                  />
                 </label>
               </Panel>
             </>
@@ -1235,25 +1500,38 @@ export default function MetallkartenEditor() {
             <>
               <Panel title="Neue Elemente hinzufügen">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button onClick={addTextField} style={buttonStyle}>Textfeld</button>
-                  <button onClick={addMultilineField} style={buttonStyle}>Mehrzeilig</button>
-                  <button onClick={addQrField} style={buttonStyle}>QR-Platzhalter</button>
+                  <button onClick={addTextField} style={buttonStyle}>
+                    Textfeld
+                  </button>
+                  <button onClick={addMultilineField} style={buttonStyle}>
+                    Mehrzeilig
+                  </button>
+                  <button onClick={addQrField} style={buttonStyle}>
+                    QR-Platzhalter
+                  </button>
                   <label style={{ ...buttonStyle, textAlign: 'center', cursor: 'pointer' }}>
                     Logo / Bild
-                    <input type="file" accept="image/*,.svg" style={{ display: 'none' }} onChange={onLogoUpload} />
+                    <input
+                      type="file"
+                      accept="image/*,.svg"
+                      style={{ display: 'none' }}
+                      onChange={onLogoUpload}
+                    />
                   </label>
                 </div>
               </Panel>
 
-              <Panel title="QR-Platzhalter" subtitle="Der finale QR-Code wird später von dir eingesetzt">
+              <Panel title="QR-Platzhalter" subtitle="Der finale QR-Code wird später eingesetzt">
                 <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                  Kunden geben keinen QR-Inhalt ein. In der Vorschau wird nur ein Platzhalter angezeigt, damit Position und Größe festgelegt werden können.
+                  Kunden geben keinen QR-Inhalt ein. In der Vorschau wird nur ein Platzhalter angezeigt,
+                  damit Position und Größe festgelegt werden können.
                 </div>
               </Panel>
 
               <Panel title="Screenshot einfügen">
                 <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                  Logo fotografieren oder Screenshot erstellen, danach hier auf die Seite klicken und <strong>Strg + V</strong> drücken.
+                  Logo fotografieren oder Screenshot erstellen, danach hier auf die Seite klicken und{' '}
+                  <strong>Strg + V</strong> drücken.
                 </div>
                 {pasteMessage ? <div style={{ fontSize: 13, color: '#047857' }}>{pasteMessage}</div> : null}
               </Panel>
@@ -1292,11 +1570,19 @@ export default function MetallkartenEditor() {
               {selected ? (
                 <>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={duplicateSelected} style={{ ...buttonStyle, flex: 1 }}>Duplizieren</button>
+                    <button onClick={duplicateSelected} style={{ ...buttonStyle, flex: 1 }}>
+                      Duplizieren
+                    </button>
                     {!protectedIds.includes(selected.id) ? (
                       <button
                         onClick={() => removeField(selected.id)}
-                        style={{ ...buttonStyle, flex: 1, background: '#dc2626', color: '#fff', borderColor: '#dc2626' }}
+                        style={{
+                          ...buttonStyle,
+                          flex: 1,
+                          background: '#dc2626',
+                          color: '#fff',
+                          borderColor: '#dc2626',
+                        }}
                       >
                         Löschen
                       </button>
@@ -1305,7 +1591,11 @@ export default function MetallkartenEditor() {
 
                   <div>
                     <label>Bezeichnung</label>
-                    <input value={selected.label} onChange={(e) => updateField(selected.id, { label: e.target.value })} style={inputStyle} />
+                    <input
+                      value={selected.label}
+                      onChange={(e) => updateField(selected.id, { label: e.target.value })}
+                      style={inputStyle}
+                    />
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -1336,16 +1626,30 @@ export default function MetallkartenEditor() {
                       <div>
                         <label>Text</label>
                         {selected.type === 'multiline' ? (
-                          <textarea value={selected.text} onChange={(e) => updateField(selected.id, { text: e.target.value })} rows={4} style={inputStyle} />
+                          <textarea
+                            value={selected.text}
+                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                            rows={4}
+                            style={inputStyle}
+                          />
                         ) : (
-                          <input value={selected.text} onChange={(e) => updateField(selected.id, { text: e.target.value })} style={inputStyle} />
+                          <input
+                            value={selected.text}
+                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                            style={inputStyle}
+                          />
                         )}
                       </div>
+
                       <div>
                         <label>Ausrichtung</label>
                         <select
                           value={selected.align}
-                          onChange={(e) => updateField(selected.id, { align: e.target.value as 'left' | 'center' | 'right' })}
+                          onChange={(e) =>
+                            updateField(selected.id, {
+                              align: e.target.value as 'left' | 'center' | 'right',
+                            })
+                          }
                           style={inputStyle}
                         >
                           <option value="left">Links</option>
@@ -1353,13 +1657,35 @@ export default function MetallkartenEditor() {
                           <option value="right">Rechts</option>
                         </select>
                       </div>
+
                       <div>
                         <label>Schriftgröße: {selected.fontSize}px</label>
-                        <input type="range" min={8} max={36} step={1} value={selected.fontSize} onChange={(e) => updateField(selected.id, { fontSize: Number(e.target.value) })} style={{ width: '100%' }} />
+                        <input
+                          type="range"
+                          min={8}
+                          max={36}
+                          step={1}
+                          value={selected.fontSize}
+                          onChange={(e) =>
+                            updateField(selected.id, { fontSize: Number(e.target.value) })
+                          }
+                          style={{ width: '100%' }}
+                        />
                       </div>
+
                       <div>
                         <label>Stärke: {selected.fontWeight}</label>
-                        <input type="range" min={300} max={800} step={100} value={selected.fontWeight} onChange={(e) => updateField(selected.id, { fontWeight: Number(e.target.value) })} style={{ width: '100%' }} />
+                        <input
+                          type="range"
+                          min={300}
+                          max={800}
+                          step={100}
+                          value={selected.fontWeight}
+                          onChange={(e) =>
+                            updateField(selected.id, { fontWeight: Number(e.target.value) })
+                          }
+                          style={{ width: '100%' }}
+                        />
                       </div>
                     </>
                   )}
@@ -1367,11 +1693,21 @@ export default function MetallkartenEditor() {
                   {selected.type === 'qr' && (
                     <>
                       <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                        Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später von dir eingefügt.
+                        Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
                       </div>
                       <div>
-                        <label>Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)</label>
-                        <input type="range" min={48} max={240} step={2} value={selected.size} onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })} style={{ width: '100%' }} />
+                        <label>
+                          Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)
+                        </label>
+                        <input
+                          type="range"
+                          min={48}
+                          max={240}
+                          step={2}
+                          value={selected.size}
+                          onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
                       </div>
                     </>
                   )}
@@ -1380,7 +1716,11 @@ export default function MetallkartenEditor() {
                     <>
                       <div>
                         <label>Datei</label>
-                        <input value={selected.filename} readOnly style={{ ...inputStyle, background: '#f9fafb' }} />
+                        <input
+                          value={selected.filename}
+                          readOnly
+                          style={{ ...inputStyle, background: '#f9fafb' }}
+                        />
                       </div>
                       <div style={{ fontSize: 13, color: '#6b7280' }}>
                         Das Bild wird automatisch für den Laser optimiert.
@@ -1397,12 +1737,13 @@ export default function MetallkartenEditor() {
           )}
 
           {activeSection === 'export' && (
-            <Panel title="Design exportieren" subtitle="Beide Seiten werden zusammen als ZIP-Datei exportiert">
+            <Panel title="Design exportieren" subtitle="Alle Karten werden zusammen als ZIP-Datei exportiert">
               <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                Wenn dein Design fertig ist, klicke auf den Button unten. Du erhältst eine ZIP-Datei mit Vorderseite und Rückseite in einem Ordner.
+                Beim Export wird für jede Karte ein eigener Unterordner mit Vorderseite und Rückseite
+                erstellt.
               </div>
               <button
-                onClick={exportBothSides}
+                onClick={exportAllCards}
                 style={{
                   ...buttonStyle,
                   width: '100%',
@@ -1413,7 +1754,7 @@ export default function MetallkartenEditor() {
                 }}
                 disabled={!canExport || isSubmitting}
               >
-                {isSubmitting ? 'ZIP wird erstellt...' : 'Design exportieren'}
+                {isSubmitting ? 'ZIP wird erstellt...' : `${cards.length} Karte(n) exportieren`}
               </button>
             </Panel>
           )}
@@ -1440,7 +1781,14 @@ export default function MetallkartenEditor() {
             }}
           >
             <div style={{ fontWeight: 700, fontSize: 16 }}>Bestellnummer {canExport ? '' : 'fehlt'}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 380px) 1fr', gap: 12, alignItems: 'center' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(220px, 380px) 1fr',
+                gap: 12,
+                alignItems: 'center',
+              }}
+            >
               <input
                 value={orderNumber}
                 onChange={(e) => setOrderNumber(e.target.value)}
@@ -1455,24 +1803,49 @@ export default function MetallkartenEditor() {
               />
               <div style={{ fontSize: 13, color: canExport ? '#047857' : '#b91c1c' }}>
                 {canExport
-                  ? `ZIP-Datei: ${cleanOrderNumber}-${sanitizeOrderNumber(cardName) || 'metallkarte'}.zip`
+                  ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten.zip`
                   : 'Bitte zuerst die Bestellnummer eingeben.'}
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}
+          >
             <div>
               <h2 style={{ margin: 0, fontSize: 24 }}>Live Vorschau</h2>
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-                {CARD_WIDTH} mm × {CARD_HEIGHT} mm · {side === 'front' ? 'Vorderseite' : 'Rückseite'} · {previewMode === 'laser' ? 'Laser-Modus' : 'Design-Modus'}
+                {CARD_WIDTH} mm × {CARD_HEIGHT} mm · {side === 'front' ? 'Vorderseite' : 'Rückseite'} ·{' '}
+                {previewMode === 'laser' ? 'Laser-Modus' : 'Design-Modus'} · {activeCard.name}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <div style={statStyle}><strong>{visibleFields.length}</strong><span>Elemente</span></div>
-              <div style={statStyle}><strong>{SAFE_MARGIN_MM} mm</strong><span>Sicherheitsrand</span></div>
-              <div style={statStyle}><strong>{CARD_LABELS[cardFinish]}</strong><span>Karte</span></div>
-              <div style={statStyle}><strong>{cleanOrderNumber || '—'}</strong><span>Bestellnummer</span></div>
+              <div style={statStyle}>
+                <strong>{cards.length}</strong>
+                <span>Karten</span>
+              </div>
+              <div style={statStyle}>
+                <strong>{visibleFields.length}</strong>
+                <span>Elemente</span>
+              </div>
+              <div style={statStyle}>
+                <strong>{SAFE_MARGIN_MM} mm</strong>
+                <span>Sicherheitsrand</span>
+              </div>
+              <div style={statStyle}>
+                <strong>{CARD_LABELS[activeCard.cardFinish]}</strong>
+                <span>Karte</span>
+              </div>
+              <div style={statStyle}>
+                <strong>{cleanOrderNumber || '—'}</strong>
+                <span>Bestellnummer</span>
+              </div>
             </div>
           </div>
 
@@ -1480,7 +1853,7 @@ export default function MetallkartenEditor() {
             <button
               onClick={() => {
                 setSide('front');
-                setSelectedId(frontFields[0]?.id || '');
+                setSelectedId(activeCard.frontFields[0]?.id || '');
                 setGuideLines([]);
               }}
               style={side === 'front' ? activeTabStyle : tabStyle}
@@ -1490,7 +1863,7 @@ export default function MetallkartenEditor() {
             <button
               onClick={() => {
                 setSide('back');
-                setSelectedId(backFields[0]?.id || '');
+                setSelectedId(activeCard.backFields[0]?.id || '');
                 setGuideLines([]);
               }}
               style={side === 'back' ? activeTabStyle : tabStyle}
@@ -1613,7 +1986,9 @@ export default function MetallkartenEditor() {
                             : 'none',
                       }}
                     >
-                      {lines.map((line, index) => <div key={index}>{line}</div>)}
+                      {lines.map((line, index) => (
+                        <div key={index}>{line}</div>
+                      ))}
                       {isSelected ? <SelectionBadge width={bounds.width} height={bounds.height} /> : null}
                     </div>
                   );
@@ -1771,30 +2146,13 @@ export default function MetallkartenEditor() {
                 : 'Design-Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.'}
             </span>
             {isProcessingImage ? (
-              <span style={{ color: '#2563eb', fontWeight: 700 }}>Bild wird für Laser optimiert...</span>
+              <span style={{ color: '#2563eb', fontWeight: 700 }}>
+                Bild wird für Laser optimiert...
+              </span>
             ) : null}
           </div>
         </main>
       </div>
-    </div>
-  );
-}
-
-function SelectionBadge({ width, height }: { width: number; height: number }) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        right: -2,
-        bottom: -22,
-        fontSize: 11,
-        background: '#4f46e5',
-        color: '#fff',
-        borderRadius: 999,
-        padding: '2px 8px',
-      }}
-    >
-      {pxToMm(width).toFixed(1)} × {pxToMm(height).toFixed(1)} mm
     </div>
   );
 }
