@@ -155,7 +155,7 @@ const CARD_LABELS: Record<CardFinishKey, string> = {
 
 function getLaserColor(cardFinish: CardFinishKey, side: Side) {
   if (cardFinish === 'silver') {
-    return side === 'front' ? '#be6a44' : '#111111';
+    return side === 'front' ? '#a86e53' : '#111111';
   }
 
   if (cardFinish === 'black') {
