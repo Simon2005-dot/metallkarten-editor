@@ -44,18 +44,6 @@ type Field = TextField | QrField | LogoField;
 type Side = 'front' | 'back';
 type CardFinishKey = 'black' | 'silver' | 'gold';
 
-type CardFinishConfig = {
-  label: string;
-  background: string;
-  previewTextFront: string;
-  previewTextBack: string;
-  previewQrFront?: string;
-  previewQrBack?: string;
-  stageBorder?: string;
-  gridLine?: string;
-  safeArea?: string;
-};
-
 type DragState = {
   id: string;
   offsetX: number;
@@ -79,43 +67,54 @@ const SAFE_MARGIN_MM = 3;
 const SAFE_MARGIN = SAFE_MARGIN_MM * PX_PER_MM;
 const DEFAULT_TEXT_COLOR = '#000000';
 
-const CARD_FINISHES: Record<CardFinishKey, CardFinishConfig> = {
+const CARD_BACKGROUNDS: Record<CardFinishKey, string> = {
+  black: '/card-backgrounds/black.png',
+  silver: '/card-backgrounds/silver.png',
+  gold: '/card-backgrounds/gold.png',
+};
+
+const CARD_FRAME_STYLES: Record<
+  CardFinishKey,
+  { border: string; gridLine: string; safeArea: string }
+> = {
   black: {
-    label: 'Schwarz',
-    background: 'linear-gradient(145deg, #2b2b2b 0%, #141414 45%, #050505 100%)',
-    previewTextFront: '#f3f4f6',
-    previewTextBack: '#e5e7eb',
-    previewQrFront: '#f9fafb',
-    previewQrBack: '#f9fafb',
-    stageBorder: '#3f3f46',
+    border: '#3f3f46',
     gridLine: 'rgba(255,255,255,0.08)',
     safeArea: 'rgba(255,255,255,0.35)',
   },
   silver: {
-    label: 'Silber',
-    background:
-      'repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0px, rgba(255,255,255,0.18) 1px, rgba(148,163,184,0.06) 1px, rgba(148,163,184,0.06) 3px, rgba(255,255,255,0.12) 3px, rgba(255,255,255,0.12) 5px), linear-gradient(145deg, #f8fafc 0%, #d1d5db 22%, #9ca3af 48%, #e5e7eb 78%, #cbd5e1 100%)',
-    previewTextFront: '#111827',
-    previewTextBack: '#1f2937',
-    previewQrFront: '#111827',
-    previewQrBack: '#111827',
-    stageBorder: '#9ca3af',
+    border: '#9ca3af',
     gridLine: 'rgba(0,0,0,0.08)',
     safeArea: 'rgba(31,41,55,0.35)',
   },
   gold: {
-    label: 'Gold',
-    background:
-      'repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0px, rgba(255,255,255,0.18) 1px, rgba(180,140,40,0.06) 1px, rgba(180,140,40,0.06) 3px, rgba(255,255,255,0.12) 3px, rgba(255,255,255,0.12) 5px), linear-gradient(145deg, #fff6cc 0%, #f4d35e 20%, #d4a017 45%, #f1c232 70%, #b8860b 100%)',
-    previewTextFront: '#2b1e05',
-    previewTextBack: '#3a2a0a',
-    previewQrFront: '#2b1e05',
-    previewQrBack: '#2b1e05',
-    stageBorder: '#b8860b',
+    border: '#b8860b',
     gridLine: 'rgba(0,0,0,0.08)',
     safeArea: 'rgba(43,30,5,0.35)',
   },
 };
+
+const CARD_LABELS: Record<CardFinishKey, string> = {
+  black: 'Schwarz',
+  silver: 'Silber',
+  gold: 'Gold',
+};
+
+function getLaserColor(cardFinish: CardFinishKey, side: Side) {
+  if (cardFinish === 'silver') {
+    return side === 'front' ? '#be6a44' : '#111111';
+  }
+
+  if (cardFinish === 'black') {
+    return side === 'front' ? '#d1d5db' : '#c97a2b';
+  }
+
+  if (cardFinish === 'gold') {
+    return side === 'front' ? '#2b1e05' : '#3a2a0a';
+  }
+
+  return '#111111';
+}
 
 const frontDefaultFields: Field[] = [
   {
@@ -169,8 +168,8 @@ const frontDefaultFields: Field[] = [
   {
     id: 'qr-front',
     type: 'qr',
-    label: 'QR',
-    text: 'https://example.com',
+    label: 'QR Platzhalter',
+    text: '',
     x: STAGE_W - 120,
     y: STAGE_H - 120,
     size: 90,
@@ -205,8 +204,8 @@ const backDefaultFields: Field[] = [
   {
     id: 'back-qr',
     type: 'qr',
-    label: 'QR Rückseite',
-    text: 'https://example.com',
+    label: 'QR Platzhalter Rückseite',
+    text: '',
     x: STAGE_W - 150,
     y: 40,
     size: 110,
@@ -238,19 +237,19 @@ function escapeAttribute(str = '') {
   return escapeXml(str).replace(/\n/g, '&#10;');
 }
 
+function sanitizeOrderNumber(value: string) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 function normalizeQrValue(value: string) {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
   if (/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(\/.*)?$/i.test(raw)) return `https://${raw}`;
   return raw;
-}
-
-function sanitizeOrderNumber(value: string) {
-  return String(value || '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
 async function buildQrMatrix(text: string): Promise<boolean[][] | null> {
@@ -325,7 +324,7 @@ function textToSvg(field: TextField) {
 }
 
 function qrSvgGroup(field: QrField, matrix: boolean[][] | null | undefined) {
-  const qrMatrix = matrix && matrix.length > 0 ? matrix : fallbackQrMatrix(field.text || '');
+  const qrMatrix = matrix && matrix.length > 0 ? matrix : fallbackQrMatrix(field.text || 'placeholder');
   const moduleSize = field.size / qrMatrix.length;
   const { offset, size } = getQrModuleRect(moduleSize);
   let rects = '';
@@ -404,7 +403,7 @@ async function prepareFieldsForExport(fields: Field[]) {
 
       if (field.type === 'qr') {
         const normalizedText = normalizeQrValue(field.text);
-        const qrMatrix = await buildQrMatrix(normalizedText);
+        const qrMatrix = await buildQrMatrix(normalizedText || 'placeholder');
         return { ...field, text: normalizedText, qrMatrix };
       }
 
@@ -440,26 +439,29 @@ function exportSideSvg(
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${CARD_WIDTH}mm" height="${CARD_HEIGHT}mm"
      viewBox="0 0 ${STAGE_W} ${STAGE_H}">
-
   <title>${escapeXml(meta.cardName)} - ${escapeXml(meta.side)}</title>
-
   <desc>
     Bestellnummer: ${escapeXml(meta.orderNumber)}
     | Seite: ${escapeXml(meta.side)}
     | Kartenname: ${escapeXml(meta.cardName)}
   </desc>
-
   <metadata>
     {"orderNumber":"${escapeXml(meta.orderNumber)}","side":"${escapeXml(meta.side)}"}
   </metadata>
-
   ${guide}
   ${content}
-
 </svg>`;
 }
 
-function Panel({ title, children, subtitle }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  children,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section
       style={{
@@ -473,7 +475,9 @@ function Panel({ title, children, subtitle }: { title: string; subtitle?: string
     >
       <div>
         <div style={{ fontWeight: 700, fontSize: 15 }}>{title}</div>
-        {subtitle ? <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{subtitle}</div> : null}
+        {subtitle ? (
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{subtitle}</div>
+        ) : null}
       </div>
       {children}
     </section>
@@ -497,13 +501,12 @@ export default function MetallkartenEditor() {
   const [previewMode, setPreviewMode] = useState<'design' | 'laser'>('design');
   const [showFrontQr, setShowFrontQr] = useState<boolean>(true);
   const [showBackQr, setShowBackQr] = useState<boolean>(true);
-  const [qrUrlInput, setQrUrlInput] = useState<string>('https://example.com');
-  const [qrMatrices, setQrMatrices] = useState<Record<string, boolean[][]>>({});
-  const [activeSection, setActiveSection] = useState<'setup' | 'elements' | 'selected' | 'export'>('setup');
+  const [activeSection, setActiveSection] = useState<'setup' | 'elements' | 'selected' | 'export'>(
+    'setup',
+  );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [cardFinish, setCardFinish] = useState<CardFinishKey>('black');
-  const [frontPreviewTextColor, setFrontPreviewTextColor] = useState<string>(CARD_FINISHES.black.previewTextFront);
-  const [backPreviewTextColor, setBackPreviewTextColor] = useState<string>(CARD_FINISHES.black.previewTextBack);
+  const [qrMatrices, setQrMatrices] = useState<Record<string, boolean[][]>>({});
 
   const stageRef = useRef<HTMLDivElement | null>(null);
 
@@ -517,26 +520,9 @@ export default function MetallkartenEditor() {
   const selected = fields.find((f) => f.id === selectedId) || null;
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
   const canExport = cleanOrderNumber.length >= 4;
-  const currentFinish = CARD_FINISHES[cardFinish];
-  const previewTextColor = side === 'front' ? frontPreviewTextColor : backPreviewTextColor;
-  const previewQrColor = previewTextColor;
-
-  useEffect(() => {
-    if (cardFinish === 'silver') {
-      setFrontPreviewTextColor('#be6a44');
-      setBackPreviewTextColor('#111111');
-      return;
-    }
-
-    if (cardFinish === 'black') {
-      setFrontPreviewTextColor('#d1d5db');
-      setBackPreviewTextColor('#c97a2b');
-      return;
-    }
-
-    setFrontPreviewTextColor(CARD_FINISHES[cardFinish].previewTextFront);
-    setBackPreviewTextColor(CARD_FINISHES[cardFinish].previewTextBack);
-  }, [cardFinish]);
+  const previewTextColor = getLaserColor(cardFinish, side);
+  const currentBackground = CARD_BACKGROUNDS[cardFinish];
+  const frameStyle = CARD_FRAME_STYLES[cardFinish];
 
   useEffect(() => {
     const qrFields = [...frontFields, ...backFields].filter((field): field is QrField => field.type === 'qr');
@@ -545,8 +531,8 @@ export default function MetallkartenEditor() {
     const buildMatrices = async () => {
       const entries = await Promise.all(
         qrFields.map(async (field) => {
-          const matrix = await buildQrMatrix(field.text);
-          return [field.id, matrix && matrix.length > 0 ? matrix : fallbackQrMatrix(field.text)] as const;
+          const matrix = await buildQrMatrix(field.text || 'placeholder');
+          return [field.id, matrix && matrix.length > 0 ? matrix : fallbackQrMatrix(field.text || 'placeholder')] as const;
         }),
       );
 
@@ -559,11 +545,6 @@ export default function MetallkartenEditor() {
       active = false;
     };
   }, [frontFields, backFields]);
-
-  useEffect(() => {
-    const activeQr = fields.find((field) => field.id === selectedId && field.type === 'qr');
-    if (activeQr?.type === 'qr') setQrUrlInput(activeQr.text || '');
-  }, [selectedId, fields]);
 
   const updateField = (id: string, patch: Partial<Field>) => {
     setFields((current) =>
@@ -616,19 +597,17 @@ export default function MetallkartenEditor() {
 
   const addQrField = () => {
     const id = `qr-${Date.now()}`;
-    const qrValue = normalizeQrValue(qrUrlInput || 'https://example.com');
     const newField: QrField = {
       id,
       type: 'qr',
-      label: 'QR',
-      text: qrValue,
+      label: 'QR Platzhalter',
+      text: '',
       x: 80,
       y: 80,
       size: 96,
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
-    setQrUrlInput(qrValue);
     setActiveSection('selected');
   };
 
@@ -883,25 +862,6 @@ export default function MetallkartenEditor() {
     };
   }, [selected, fields]);
 
-  const applyUrlToSelectedQr = () => {
-    const normalized = normalizeQrValue(qrUrlInput);
-    if (!selected || selected.type !== 'qr') return;
-    updateField(selected.id, { text: normalized });
-    setQrUrlInput(normalized);
-    setPasteMessage('QR-Code aus URL aktualisiert.');
-    window.setTimeout(() => setPasteMessage(''), 2500);
-  };
-
-  const applyUrlToAllDefaultQrs = () => {
-    const normalized = normalizeQrValue(qrUrlInput);
-    if (!normalized) return;
-
-    setFrontFields((current) => current.map((field) => (field.type === 'qr' ? { ...field, text: normalized } : field)));
-    setBackFields((current) => current.map((field) => (field.type === 'qr' ? { ...field, text: normalized } : field)));
-    setPasteMessage('URL auf alle QR-Codes übernommen.');
-    window.setTimeout(() => setPasteMessage(''), 2500);
-  };
-
   const exportBothSides = async () => {
     if (!canExport || isSubmitting) {
       setActiveSection('setup');
@@ -953,27 +913,46 @@ export default function MetallkartenEditor() {
   const getDisplaySrc = (field: Field) => (field.type === 'logo' ? field.src : '');
 
   const renderQrPreview = (field: QrField) => {
-    const matrix = qrMatrices[field.id] || fallbackQrMatrix(field.text || '');
-    const moduleSize = field.size / matrix.length;
-    const { offset, size } = getQrModuleRect(moduleSize);
+    const placeholderStroke = previewTextColor;
+    const placeholderFill = 'rgba(255,255,255,0.04)';
 
     return (
       <svg width={field.size} height={field.size} viewBox={`0 0 ${field.size} ${field.size}`}>
-        {matrix.map((row, y) =>
-          row.map((cell, x) =>
-            cell ? (
-              <rect
-                key={`${field.id}-${x}-${y}`}
-                x={x * moduleSize + offset}
-                y={y * moduleSize + offset}
-                width={size}
-                height={size}
-                fill={previewQrColor}
-                shapeRendering="crispEdges"
-              />
-            ) : null,
-          ),
-        )}
+        <rect
+          x="1"
+          y="1"
+          width={field.size - 2}
+          height={field.size - 2}
+          rx="8"
+          fill={placeholderFill}
+          stroke={placeholderStroke}
+          strokeWidth="2"
+          strokeDasharray="8 6"
+        />
+        <rect x="10" y="10" width="18" height="18" fill={placeholderStroke} opacity="0.9" />
+        <rect x={field.size - 28} y="10" width="18" height="18" fill={placeholderStroke} opacity="0.9" />
+        <rect x="10" y={field.size - 28} width="18" height="18" fill={placeholderStroke} opacity="0.9" />
+        <text
+          x="50%"
+          y="54%"
+          textAnchor="middle"
+          fontSize="12"
+          fontWeight="700"
+          fill={placeholderStroke}
+          fontFamily="Arial, Helvetica, sans-serif"
+        >
+          QR
+        </text>
+        <text
+          x="50%"
+          y="66%"
+          textAnchor="middle"
+          fontSize="9"
+          fill={placeholderStroke}
+          fontFamily="Arial, Helvetica, sans-serif"
+        >
+          Platzhalter
+        </text>
       </svg>
     );
   };
@@ -1069,27 +1048,8 @@ export default function MetallkartenEditor() {
                   </select>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label>Schrift Vorderseite</label>
-                    <input
-                      value={frontPreviewTextColor}
-                      onChange={(e) => setFrontPreviewTextColor(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div>
-                    <label>Schrift Rückseite</label>
-                    <input
-                      value={backPreviewTextColor}
-                      onChange={(e) => setBackPreviewTextColor(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </div>
-                </div>
-
                 <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
-                  Für die Vorschau sind die Gravurfarben jetzt direkt vorbelegt: Silber vorne gold-braun und hinten schwarz, Schwarz vorne silber und hinten schwach orange. Der SVG-Export bleibt weiter laserfreundlich in Schwarz.
+                  Die Gravurfarben sind fest hinterlegt und können von Kunden nicht verändert werden.
                 </div>
               </Panel>
 
@@ -1138,7 +1098,7 @@ export default function MetallkartenEditor() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <button onClick={addTextField} style={buttonStyle}>Textfeld</button>
                   <button onClick={addMultilineField} style={buttonStyle}>Mehrzeilig</button>
-                  <button onClick={addQrField} style={buttonStyle}>QR-Code</button>
+                  <button onClick={addQrField} style={buttonStyle}>QR-Platzhalter</button>
                   <label style={{ ...buttonStyle, textAlign: 'center', cursor: 'pointer' }}>
                     Logo / Bild
                     <input type="file" accept="image/*,.svg" style={{ display: 'none' }} onChange={onLogoUpload} />
@@ -1146,26 +1106,9 @@ export default function MetallkartenEditor() {
                 </div>
               </Panel>
 
-              <Panel title="QR aus URL erzeugen">
-                <div>
-                  <label>URL oder Link</label>
-                  <input
-                    value={qrUrlInput}
-                    onChange={(e) => setQrUrlInput(e.target.value)}
-                    placeholder="https://deine-domain.de"
-                    style={inputStyle}
-                  />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button onClick={applyUrlToSelectedQr} style={buttonStyle} disabled={!selected || selected.type !== 'qr'}>
-                    Auf gewählten QR
-                  </button>
-                  <button onClick={applyUrlToAllDefaultQrs} style={{ ...buttonStyle, background: '#111827', color: '#fff', borderColor: '#111827' }}>
-                    Auf alle QR
-                  </button>
-                </div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>
-                  Domains ohne http werden automatisch als https gespeichert.
+              <Panel title="QR-Platzhalter" subtitle="Der finale QR-Code wird später von dir eingesetzt">
+                <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+                  Kunden geben keinen QR-Inhalt ein. In der Vorschau wird nur ein Platzhalter angezeigt, damit Position und Größe festgelegt werden können.
                 </div>
               </Panel>
 
@@ -1284,21 +1227,9 @@ export default function MetallkartenEditor() {
 
                   {selected.type === 'qr' && (
                     <>
-                      <div>
-                        <label>QR Inhalt / URL</label>
-                        <input
-                          value={selected.text}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setQrUrlInput(value);
-                            updateField(selected.id, { text: value });
-                          }}
-                          style={inputStyle}
-                        />
+                      <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+                        Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später von dir eingefügt.
                       </div>
-                      <button onClick={applyUrlToSelectedQr} style={{ ...buttonStyle, width: '100%' }}>
-                        URL normalisieren
-                      </button>
                       <div>
                         <label>Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)</label>
                         <input type="range" min={48} max={240} step={2} value={selected.size} onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })} style={{ width: '100%' }} />
@@ -1319,7 +1250,9 @@ export default function MetallkartenEditor() {
                   )}
                 </>
               ) : (
-                <div style={{ fontSize: 14, color: '#6b7280' }}>Klicke links in der Elementliste oder direkt in der Vorschau auf ein Element.</div>
+                <div style={{ fontSize: 14, color: '#6b7280' }}>
+                  Klicke links in der Elementliste oder direkt in der Vorschau auf ein Element.
+                </div>
               )}
             </Panel>
           )}
@@ -1331,7 +1264,14 @@ export default function MetallkartenEditor() {
               </div>
               <button
                 onClick={exportBothSides}
-                style={{ ...buttonStyle, width: '100%', background: '#111827', color: '#fff', borderColor: '#111827', opacity: canExport && !isSubmitting ? 1 : 0.55 }}
+                style={{
+                  ...buttonStyle,
+                  width: '100%',
+                  background: '#111827',
+                  color: '#fff',
+                  borderColor: '#111827',
+                  opacity: canExport && !isSubmitting ? 1 : 0.55,
+                }}
                 disabled={!canExport || isSubmitting}
               >
                 {isSubmitting ? 'ZIP wird erstellt...' : 'Design exportieren'}
@@ -1392,7 +1332,7 @@ export default function MetallkartenEditor() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <div style={statStyle}><strong>{visibleFields.length}</strong><span>Elemente</span></div>
               <div style={statStyle}><strong>{SAFE_MARGIN_MM} mm</strong><span>Sicherheitsrand</span></div>
-              <div style={statStyle}><strong>{currentFinish.label}</strong><span>Karte</span></div>
+              <div style={statStyle}><strong>{CARD_LABELS[cardFinish]}</strong><span>Karte</span></div>
               <div style={statStyle}><strong>{cleanOrderNumber || '—'}</strong><span>Bestellnummer</span></div>
             </div>
           </div>
@@ -1442,16 +1382,18 @@ export default function MetallkartenEditor() {
                 position: 'relative',
                 width: STAGE_W,
                 height: STAGE_H,
-                background: currentFinish.background,
-                border: `1px solid ${currentFinish.stageBorder || '#d1d5db'}`,
+                border: `1px solid ${frameStyle.border}`,
                 borderRadius: 18,
                 userSelect: 'none',
+                overflow: 'hidden',
                 backgroundImage: showGrid
-                  ? `linear-gradient(to right, ${currentFinish.gridLine || 'rgba(255,255,255,0.08)'} 1px, transparent 1px), linear-gradient(to bottom, ${currentFinish.gridLine || 'rgba(255,255,255,0.08)'} 1px, transparent 1px), ${currentFinish.background}`
-                  : currentFinish.background,
-                backgroundSize: showGrid ? '20px 20px, 20px 20px, auto' : 'auto',
-                filter: previewMode === 'laser' ? 'grayscale(1) contrast(1.25)' : 'none',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 -20px 40px rgba(0,0,0,0.08)',
+                  ? `linear-gradient(to right, ${frameStyle.gridLine} 1px, transparent 1px), linear-gradient(to bottom, ${frameStyle.gridLine} 1px, transparent 1px), url(${currentBackground})`
+                  : `url(${currentBackground})`,
+                backgroundSize: showGrid ? '20px 20px, 20px 20px, cover' : 'cover',
+                backgroundPosition: showGrid ? '0 0, 0 0, center' : 'center',
+                backgroundRepeat: 'repeat, repeat, no-repeat',
+                filter: previewMode === 'laser' ? 'grayscale(0.2) contrast(1.1)' : 'none',
+                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
               }}
             >
               {showSafeArea ? (
@@ -1463,7 +1405,7 @@ export default function MetallkartenEditor() {
                     top: SAFE_MARGIN,
                     width: STAGE_W - SAFE_MARGIN * 2,
                     height: STAGE_H - SAFE_MARGIN * 2,
-                    border: `1px dashed ${currentFinish.safeArea || '#9ca3af'}`,
+                    border: `1px dashed ${frameStyle.safeArea}`,
                   }}
                 />
               ) : null}
@@ -1496,7 +1438,10 @@ export default function MetallkartenEditor() {
                         lineHeight: 1.35,
                         textAlign: field.align,
                         minWidth: 20,
-                        textShadow: previewMode === 'design' && cardFinish !== 'silver' ? '0 1px 1px rgba(0,0,0,0.25)' : 'none',
+                        textShadow:
+                          previewMode === 'design'
+                            ? '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)'
+                            : 'none',
                       }}
                     >
                       {lines.map((line, index) => <div key={index}>{line}</div>)}
@@ -1587,20 +1532,20 @@ export default function MetallkartenEditor() {
                       }}
                     >
                       <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            WebkitMaskImage: `url(${getDisplaySrc(field)})`,
-                            WebkitMaskRepeat: 'no-repeat',
-                            WebkitMaskSize: 'contain',
-                            WebkitMaskPosition: 'center',
-                            maskImage: `url(${getDisplaySrc(field)})`,
-                            maskRepeat: 'no-repeat',
-                            maskSize: 'contain',
-                            maskPosition: 'center',
-                            backgroundColor: previewTextColor
-                          }}
-                        />
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          WebkitMaskImage: `url(${getDisplaySrc(field)})`,
+                          WebkitMaskRepeat: 'no-repeat',
+                          WebkitMaskSize: 'contain',
+                          WebkitMaskPosition: 'center',
+                          maskImage: `url(${getDisplaySrc(field)})`,
+                          maskRepeat: 'no-repeat',
+                          maskSize: 'contain',
+                          maskPosition: 'center',
+                          backgroundColor: previewTextColor,
+                        }}
+                      />
                       {isSelected ? (
                         <>
                           <SelectionBadge width={field.width} height={field.height} />
@@ -1640,11 +1585,21 @@ export default function MetallkartenEditor() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, color: previewMode === 'laser' ? '#7c3aed' : '#6b7280' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              fontSize: 13,
+              color: previewMode === 'laser' ? '#7c3aed' : '#6b7280',
+            }}
+          >
             <span>
               {previewMode === 'laser'
                 ? 'Laser-Vorschau aktiv. Farben werden als gravurfreundliche Darstellung simuliert.'
-                : 'Design-Vorschau aktiv. Die Kartenfarbe und Schriftwirkung werden realitätsnäher angezeigt.'}
+                : 'Design-Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.'}
             </span>
           </div>
         </main>
