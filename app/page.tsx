@@ -730,9 +730,6 @@ export default function MetallkartenEditor() {
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [pasteMessage, setPasteMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false);
-  const [activeSection, setActiveSection] = useState<'setup' | 'elements' | 'selected' | 'export'>(
-    'setup',
-  );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [, setQrMatrices] = useState<Record<string, boolean[][]>>({});
 
@@ -843,7 +840,6 @@ export default function MetallkartenEditor() {
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
-    setActiveSection('selected');
   };
 
   const addMultilineField = () => {
@@ -863,7 +859,6 @@ export default function MetallkartenEditor() {
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
-    setActiveSection('selected');
   };
 
   const addQrField = () => {
@@ -879,7 +874,6 @@ export default function MetallkartenEditor() {
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
-    setActiveSection('selected');
   };
 
   const addNewCard = () => {
@@ -889,7 +883,6 @@ export default function MetallkartenEditor() {
     setSelectedId(newCard.frontFields[0]?.id || '');
     setSide('front');
     setGuideLines([]);
-    setActiveSection('setup');
   };
 
   const duplicateActiveCard = () => {
@@ -906,7 +899,6 @@ export default function MetallkartenEditor() {
     setSelectedId(duplicated.frontFields[0]?.id || '');
     setSide('front');
     setGuideLines([]);
-    setActiveSection('setup');
   };
 
   const loadImageElement = (src: string) =>
@@ -941,7 +933,6 @@ export default function MetallkartenEditor() {
 
     setFields((current) => [...current, newLogo]);
     setSelectedId(id);
-    setActiveSection('selected');
 
     setTimeout(async () => {
       try {
@@ -1022,7 +1013,6 @@ export default function MetallkartenEditor() {
     const copy = duplicateField(selected);
     setFields((current) => [...current, copy]);
     setSelectedId(copy.id);
-    setActiveSection('selected');
   };
 
   const removeField = (id: string) => {
@@ -1050,7 +1040,6 @@ export default function MetallkartenEditor() {
   const onMouseDown = (event: React.MouseEvent<HTMLDivElement>, field: Field) => {
     const pos = pointerPos(event);
     setSelectedId(field.id);
-    setActiveSection('selected');
     setDragging({
       id: field.id,
       offsetX: pos.x - field.x,
@@ -1199,7 +1188,6 @@ export default function MetallkartenEditor() {
 
   const exportAllCards = async () => {
     if (!canExport || isSubmitting) {
-      setActiveSection('setup');
       return;
     }
 
@@ -1276,30 +1264,9 @@ export default function MetallkartenEditor() {
           strokeWidth="2"
           strokeDasharray="8 6"
         />
-        <rect
-          x="10"
-          y="10"
-          width="18"
-          height="18"
-          fill={placeholderStroke}
-          opacity="0.9"
-        />
-        <rect
-          x={field.size - 28}
-          y="10"
-          width="18"
-          height="18"
-          fill={placeholderStroke}
-          opacity="0.9"
-        />
-        <rect
-          x="10"
-          y={field.size - 28}
-          width="18"
-          height="18"
-          fill={placeholderStroke}
-          opacity="0.9"
-        />
+        <rect x="10" y="10" width="18" height="18" fill={placeholderStroke} opacity="0.9" />
+        <rect x={field.size - 28} y="10" width="18" height="18" fill={placeholderStroke} opacity="0.9" />
+        <rect x="10" y={field.size - 28} width="18" height="18" fill={placeholderStroke} opacity="0.9" />
         <text
           x="50%"
           y="54%"
@@ -1376,21 +1343,18 @@ export default function MetallkartenEditor() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            {[
-              { key: 'setup', label: '1. Setup' },
-              { key: 'elements', label: '2. Elemente' },
-              { key: 'selected', label: '3. Auswahl' },
-              { key: 'export', label: '4. Export' },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setActiveSection(item.key as typeof activeSection)}
-                style={activeSection === item.key ? activeChipStyle : chipStyle}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div
+            style={{
+              border: '1px solid #e5e7eb',
+              borderRadius: 14,
+              padding: 12,
+              background: '#f9fafb',
+              fontSize: 14,
+              fontWeight: 700,
+              color: '#111827',
+            }}
+          >
+            Einstellungen
           </div>
 
           <Panel title="Bestellung" subtitle="Pflichtangabe für die Zuordnung deiner Dateien">
@@ -1490,317 +1454,304 @@ export default function MetallkartenEditor() {
             </div>
           </Panel>
 
-          {activeSection === 'setup' && (
-            <Panel title="Ansicht">
-              <label style={toggleRowStyle}>
-                <span>Sicherheitsbereich</span>
-                <input
-                  type="checkbox"
-                  checked={showSafeArea}
-                  onChange={(e) => setShowSafeArea(e.target.checked)}
-                />
-              </label>
-              <label style={toggleRowStyle}>
-                <span>Raster anzeigen</span>
-                <input
-                  type="checkbox"
-                  checked={showGrid}
-                  onChange={(e) => setShowGrid(e.target.checked)}
-                />
-              </label>
-              <label style={toggleRowStyle}>
-                <span>Am Raster ausrichten</span>
-                <input
-                  type="checkbox"
-                  checked={snapToGrid}
-                  onChange={(e) => setSnapToGrid(e.target.checked)}
-                />
-              </label>
-              <label style={toggleRowStyle}>
-                <span>QR Vorderseite</span>
-                <input
-                  type="checkbox"
-                  checked={activeCard.showFrontQr}
-                  onChange={(e) => updateActiveCard({ showFrontQr: e.target.checked })}
-                />
-              </label>
-              <label style={toggleRowStyle}>
-                <span>QR Rückseite</span>
-                <input
-                  type="checkbox"
-                  checked={activeCard.showBackQr}
-                  onChange={(e) => updateActiveCard({ showBackQr: e.target.checked })}
-                />
-              </label>
-            </Panel>
-          )}
+          <Panel title="Ansicht">
+            <label style={toggleRowStyle}>
+              <span>Sicherheitsbereich</span>
+              <input
+                type="checkbox"
+                checked={showSafeArea}
+                onChange={(e) => setShowSafeArea(e.target.checked)}
+              />
+            </label>
+            <label style={toggleRowStyle}>
+              <span>Raster anzeigen</span>
+              <input
+                type="checkbox"
+                checked={showGrid}
+                onChange={(e) => setShowGrid(e.target.checked)}
+              />
+            </label>
+            <label style={toggleRowStyle}>
+              <span>Am Raster ausrichten</span>
+              <input
+                type="checkbox"
+                checked={snapToGrid}
+                onChange={(e) => setSnapToGrid(e.target.checked)}
+              />
+            </label>
+            <label style={toggleRowStyle}>
+              <span>QR Vorderseite</span>
+              <input
+                type="checkbox"
+                checked={activeCard.showFrontQr}
+                onChange={(e) => updateActiveCard({ showFrontQr: e.target.checked })}
+              />
+            </label>
+            <label style={toggleRowStyle}>
+              <span>QR Rückseite</span>
+              <input
+                type="checkbox"
+                checked={activeCard.showBackQr}
+                onChange={(e) => updateActiveCard({ showBackQr: e.target.checked })}
+              />
+            </label>
+          </Panel>
 
-          {activeSection === 'elements' && (
-            <>
-              <Panel title="Neue Elemente hinzufügen">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button onClick={addTextField} style={buttonStyle}>
-                    Textfeld
-                  </button>
-                  <button onClick={addMultilineField} style={buttonStyle}>
-                    Mehrzeilig
-                  </button>
-                  <button onClick={addQrField} style={buttonStyle}>
-                    QR-Platzhalter
-                  </button>
-                  <label style={{ ...buttonStyle, textAlign: 'center', cursor: 'pointer' }}>
-                    Logo / Bild
-                    <input
-                      type="file"
-                      accept="image/*,.svg"
-                      style={{ display: 'none' }}
-                      onChange={onLogoUpload}
-                    />
-                  </label>
-                </div>
-              </Panel>
-
-              <Panel title="QR-Platzhalter" subtitle="Der finale QR-Code wird später eingesetzt">
-                <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                  Kunden geben keinen QR-Inhalt ein. In der Vorschau wird nur ein Platzhalter angezeigt,
-                  damit Position und Größe festgelegt werden können.
-                </div>
-              </Panel>
-
-              <Panel title="Screenshot einfügen">
-                <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                  Logo fotografieren oder Screenshot erstellen, danach hier auf die Seite klicken und{' '}
-                  <strong>Strg + V</strong> drücken.
-                </div>
-                {pasteMessage ? <div style={{ fontSize: 13, color: '#047857' }}>{pasteMessage}</div> : null}
-              </Panel>
-
-              <Panel title="Elementliste">
-                <div style={{ display: 'grid', gap: 8, maxHeight: 260, overflow: 'auto' }}>
-                  {visibleFields.map((field) => (
-                    <button
-                      key={field.id}
-                      onClick={() => {
-                        setSelectedId(field.id);
-                        setActiveSection('selected');
-                      }}
-                      style={{
-                        textAlign: 'left',
-                        border: selectedId === field.id ? '1px solid #111827' : '1px solid #e5e7eb',
-                        background: selectedId === field.id ? '#eef2ff' : '#fafafa',
-                        borderRadius: 12,
-                        padding: 10,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <div style={{ fontWeight: 700 }}>{field.label}</div>
-                      <div style={{ fontSize: 12, color: '#6b7280' }}>
-                        {field.type} · X {pxToMm(field.x).toFixed(1)} mm · Y {pxToMm(field.y).toFixed(1)} mm
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </Panel>
-            </>
-          )}
-
-          {activeSection === 'selected' && (
-            <Panel title={selected ? `Ausgewählt: ${selected.label}` : 'Kein Element ausgewählt'}>
-              {selected ? (
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div>
-                      <label>X Position (mm)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={pxToMm(selected.x).toFixed(1)}
-                        onChange={(e) => updateField(selected.id, { x: mmToPx(Number(e.target.value)) })}
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div>
-                      <label>Y Position (mm)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={pxToMm(selected.y).toFixed(1)}
-                        onChange={(e) => updateField(selected.id, { y: mmToPx(Number(e.target.value)) })}
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
-
-                  {(selected.type === 'text' || selected.type === 'multiline') && (
-                    <>
-                      <div>
-                        <label>Text</label>
-                        {selected.type === 'multiline' ? (
-                          <textarea
-                            value={selected.text}
-                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
-                            rows={4}
-                            style={inputStyle}
-                          />
-                        ) : (
-                          <input
-                            value={selected.text}
-                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
-                            style={inputStyle}
-                          />
-                        )}
-                      </div>
-
-                      <div>
-                        <label>Schriftart</label>
-                        <select
-                          value={selected.fontFamily}
-                          onChange={(e) =>
-                            updateField(selected.id, {
-                              fontFamily: e.target.value as FontFamilyKey,
-                            })
-                          }
-                          style={inputStyle}
-                        >
-                          {Object.entries(FONT_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label>Ausrichtung</label>
-                        <select
-                          value={selected.align}
-                          onChange={(e) =>
-                            updateField(selected.id, {
-                              align: e.target.value as 'left' | 'center' | 'right',
-                            })
-                          }
-                          style={inputStyle}
-                        >
-                          <option value="left">Links</option>
-                          <option value="center">Zentriert</option>
-                          <option value="right">Rechts</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label>Schriftgröße: {selected.fontSize}px</label>
-                        <input
-                          type="range"
-                          min={8}
-                          max={36}
-                          step={1}
-                          value={selected.fontSize}
-                          onChange={(e) =>
-                            updateField(selected.id, { fontSize: Number(e.target.value) })
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-
-                      <div>
-                        <label>Stärke: {selected.fontWeight}</label>
-                        <input
-                          type="range"
-                          min={300}
-                          max={800}
-                          step={100}
-                          value={selected.fontWeight}
-                          onChange={(e) =>
-                            updateField(selected.id, { fontWeight: Number(e.target.value) })
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {selected.type === 'qr' && (
-                    <>
-                      <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                        Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
-                      </div>
-                      <div>
-                        <label>
-                          Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)
-                        </label>
-                        <input
-                          type="range"
-                          min={48}
-                          max={240}
-                          step={2}
-                          value={selected.size}
-                          onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {selected.type === 'logo' && (
-                    <>
-                      <div>
-                        <label>Datei</label>
-                        <input
-                          value={selected.filename}
-                          readOnly
-                          style={{ ...inputStyle, background: '#f9fafb' }}
-                        />
-                      </div>
-                      <div style={{ fontSize: 13, color: '#6b7280' }}>
-                        Das Bild wird automatisch für den Laser optimiert.
-                      </div>
-                    </>
-                  )}
-
-                  {!protectedIds.includes(selected.id) ? (
-                    <button
-                      onClick={() => removeField(selected.id)}
-                      style={{
-                        ...buttonStyle,
-                        background: '#dc2626',
-                        color: '#fff',
-                        borderColor: '#dc2626',
-                      }}
-                    >
-                      Element löschen
-                    </button>
-                  ) : null}
-                </div>
-              ) : (
-                <div style={{ fontSize: 14, color: '#6b7280' }}>
-                  Klicke links in der Elementliste oder direkt in der Vorschau auf ein Element.
-                </div>
-              )}
-            </Panel>
-          )}
-
-          {activeSection === 'export' && (
-            <Panel title="Design exportieren" subtitle="Alle Karten werden zusammen als ZIP-Datei exportiert">
-              <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                Beim Export wird für jede Karte ein eigener Unterordner mit Vorderseite und Rückseite
-                erstellt.
-              </div>
-              <button
-                onClick={exportAllCards}
-                style={{
-                  ...buttonStyle,
-                  width: '100%',
-                  background: '#111827',
-                  color: '#fff',
-                  borderColor: '#111827',
-                  opacity: canExport && !isSubmitting ? 1 : 0.55,
-                }}
-                disabled={!canExport || isSubmitting}
-              >
-                {isSubmitting ? 'ZIP wird erstellt...' : `${cards.length} Karte(n) exportieren`}
+          <Panel title="Neue Elemente hinzufügen">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button onClick={addTextField} style={buttonStyle}>
+                Textfeld
               </button>
-            </Panel>
-          )}
+              <button onClick={addMultilineField} style={buttonStyle}>
+                Mehrzeilig
+              </button>
+              <button onClick={addQrField} style={buttonStyle}>
+                QR-Platzhalter
+              </button>
+              <label style={{ ...buttonStyle, textAlign: 'center', cursor: 'pointer' }}>
+                Logo / Bild
+                <input
+                  type="file"
+                  accept="image/*,.svg"
+                  style={{ display: 'none' }}
+                  onChange={onLogoUpload}
+                />
+              </label>
+            </div>
+          </Panel>
+
+          <Panel title="QR-Platzhalter" subtitle="Der finale QR-Code wird später eingesetzt">
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+              Kunden geben keinen QR-Inhalt ein. In der Vorschau wird nur ein Platzhalter angezeigt,
+              damit Position und Größe festgelegt werden können.
+            </div>
+          </Panel>
+
+          <Panel title="Screenshot einfügen">
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+              Logo fotografieren oder Screenshot erstellen, danach hier auf die Seite klicken und{' '}
+              <strong>Strg + V</strong> drücken.
+            </div>
+            {pasteMessage ? <div style={{ fontSize: 13, color: '#047857' }}>{pasteMessage}</div> : null}
+          </Panel>
+
+          <Panel title="Elementliste">
+            <div style={{ display: 'grid', gap: 8, maxHeight: 260, overflow: 'auto' }}>
+              {visibleFields.map((field) => (
+                <button
+                  key={field.id}
+                  onClick={() => setSelectedId(field.id)}
+                  style={{
+                    textAlign: 'left',
+                    border: selectedId === field.id ? '1px solid #111827' : '1px solid #e5e7eb',
+                    background: selectedId === field.id ? '#eef2ff' : '#fafafa',
+                    borderRadius: 12,
+                    padding: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>{field.label}</div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>
+                    {field.type} · X {pxToMm(field.x).toFixed(1)} mm · Y {pxToMm(field.y).toFixed(1)} mm
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel title={selected ? `Ausgewählt: ${selected.label}` : 'Kein Element ausgewählt'}>
+            {selected ? (
+              <div style={{ display: 'grid', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label>X Position (mm)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={pxToMm(selected.x).toFixed(1)}
+                      onChange={(e) => updateField(selected.id, { x: mmToPx(Number(e.target.value)) })}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label>Y Position (mm)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={pxToMm(selected.y).toFixed(1)}
+                      onChange={(e) => updateField(selected.id, { y: mmToPx(Number(e.target.value)) })}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                {(selected.type === 'text' || selected.type === 'multiline') && (
+                  <>
+                    <div>
+                      <label>Text</label>
+                      {selected.type === 'multiline' ? (
+                        <textarea
+                          value={selected.text}
+                          onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                          rows={4}
+                          style={inputStyle}
+                        />
+                      ) : (
+                        <input
+                          value={selected.text}
+                          onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                          style={inputStyle}
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label>Schriftart</label>
+                      <select
+                        value={selected.fontFamily}
+                        onChange={(e) =>
+                          updateField(selected.id, {
+                            fontFamily: e.target.value as FontFamilyKey,
+                          })
+                        }
+                        style={inputStyle}
+                      >
+                        {Object.entries(FONT_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label>Ausrichtung</label>
+                      <select
+                        value={selected.align}
+                        onChange={(e) =>
+                          updateField(selected.id, {
+                            align: e.target.value as 'left' | 'center' | 'right',
+                          })
+                        }
+                        style={inputStyle}
+                      >
+                        <option value="left">Links</option>
+                        <option value="center">Zentriert</option>
+                        <option value="right">Rechts</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label>Schriftgröße: {selected.fontSize}px</label>
+                      <input
+                        type="range"
+                        min={8}
+                        max={36}
+                        step={1}
+                        value={selected.fontSize}
+                        onChange={(e) =>
+                          updateField(selected.id, { fontSize: Number(e.target.value) })
+                        }
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label>Stärke: {selected.fontWeight}</label>
+                      <input
+                        type="range"
+                        min={300}
+                        max={800}
+                        step={100}
+                        value={selected.fontWeight}
+                        onChange={(e) =>
+                          updateField(selected.id, { fontWeight: Number(e.target.value) })
+                        }
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {selected.type === 'qr' && (
+                  <>
+                    <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+                      Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
+                    </div>
+                    <div>
+                      <label>
+                        Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)
+                      </label>
+                      <input
+                        type="range"
+                        min={48}
+                        max={240}
+                        step={2}
+                        value={selected.size}
+                        onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {selected.type === 'logo' && (
+                  <>
+                    <div>
+                      <label>Datei</label>
+                      <input
+                        value={selected.filename}
+                        readOnly
+                        style={{ ...inputStyle, background: '#f9fafb' }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>
+                      Das Bild wird automatisch für den Laser optimiert.
+                    </div>
+                  </>
+                )}
+
+                {!protectedIds.includes(selected.id) ? (
+                  <button
+                    onClick={() => removeField(selected.id)}
+                    style={{
+                      ...buttonStyle,
+                      background: '#dc2626',
+                      color: '#fff',
+                      borderColor: '#dc2626',
+                    }}
+                  >
+                    Element löschen
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <div style={{ fontSize: 14, color: '#6b7280' }}>
+                Klicke links in der Elementliste oder direkt in der Vorschau auf ein Element.
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Design exportieren" subtitle="Alle Karten werden zusammen als ZIP-Datei exportiert">
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+              Beim Export wird für jede Karte ein eigener Unterordner mit Vorderseite und Rückseite
+              erstellt.
+            </div>
+            <button
+              onClick={exportAllCards}
+              style={{
+                ...buttonStyle,
+                width: '100%',
+                background: '#111827',
+                color: '#fff',
+                borderColor: '#111827',
+                opacity: canExport && !isSubmitting ? 1 : 0.55,
+              }}
+              disabled={!canExport || isSubmitting}
+            >
+              {isSubmitting ? 'ZIP wird erstellt...' : `${cards.length} Karte(n) exportieren`}
+            </button>
+          </Panel>
         </aside>
 
         <main
@@ -2007,10 +1958,7 @@ export default function MetallkartenEditor() {
                     <div
                       key={field.id}
                       onMouseDown={(e) => onMouseDown(e, field)}
-                      onClick={() => {
-                        setSelectedId(field.id);
-                        setActiveSection('selected');
-                      }}
+                      onClick={() => setSelectedId(field.id)}
                       style={{
                         position: 'absolute',
                         cursor: 'move',
@@ -2042,10 +1990,7 @@ export default function MetallkartenEditor() {
                     <div
                       key={field.id}
                       onMouseDown={(e) => onMouseDown(e, field)}
-                      onClick={() => {
-                        setSelectedId(field.id);
-                        setActiveSection('selected');
-                      }}
+                      onClick={() => setSelectedId(field.id)}
                       style={{
                         position: 'absolute',
                         cursor: 'move',
@@ -2099,10 +2044,7 @@ export default function MetallkartenEditor() {
                     <div
                       key={field.id}
                       onMouseDown={(e) => onMouseDown(e, field)}
-                      onClick={() => {
-                        setSelectedId(field.id);
-                        setActiveSection('selected');
-                      }}
+                      onClick={() => setSelectedId(field.id)}
                       style={{
                         position: 'absolute',
                         cursor: 'move',
@@ -2230,24 +2172,6 @@ const activeTabStyle: React.CSSProperties = {
   background: '#111827',
   color: '#fff',
   borderColor: '#111827',
-};
-
-const chipStyle: React.CSSProperties = {
-  padding: '8px 10px',
-  borderRadius: 999,
-  border: '1px solid #d1d5db',
-  background: '#fff',
-  cursor: 'pointer',
-  fontSize: 12,
-  color: '#111827',
-};
-
-const activeChipStyle: React.CSSProperties = {
-  ...chipStyle,
-  background: '#eef2ff',
-  borderColor: '#4f46e5',
-  color: '#312e81',
-  fontWeight: 700,
 };
 
 const toggleRowStyle: React.CSSProperties = {
