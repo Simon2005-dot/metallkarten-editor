@@ -1351,7 +1351,6 @@ export default function MetallkartenEditor() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              Kartennamen und Kartenfarbe direkt in der Kartenliste bearbeiten.
             </div>
           </div>
 
@@ -1492,13 +1491,16 @@ export default function MetallkartenEditor() {
                 onChange={(e) => setSnapToGrid(e.target.checked)}
               />
             </label>
-            <label style={toggleRowStyle}>
-              <span>QR Vorderseite</span>
-              <input
-                type="checkbox"
-                checked={activeCard.showFrontQr}
-                onChange={(e) => updateActiveCard({ showFrontQr: e.target.checked })}
-              />
+<label style={toggleRowStyle}>
+  <span>QR Vorderseite</span>
+  <input
+    type="checkbox"
+    checked={activeCard.showFrontQr ?? false}
+    onChange={(e) =>
+      updateActiveCard({ showFrontQr: e.target.checked })
+    }
+  />
+
             </label>
             <label style={toggleRowStyle}>
               <span>QR Rückseite</span>
@@ -1800,7 +1802,7 @@ export default function MetallkartenEditor() {
               <input
                 value={orderNumber}
                 onChange={(e) => setOrderNumber(e.target.value)}
-                placeholder="Bestellnummer hier eingeben"
+                placeholder="Bestellnummer oder Firmenname eingeben"
                 style={{
                   ...inputStyle,
                   marginTop: 0,
@@ -1812,7 +1814,7 @@ export default function MetallkartenEditor() {
               <div style={{ fontSize: 13, color: canExport ? '#047857' : '#b91c1c' }}>
                 {canExport
                   ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten.zip`
-                  : 'Bitte zuerst die Bestellnummer eingeben.'}
+                  : 'Bitte zuerst die Bestellnummer oder Firmenname eingeben'}
               </div>
             </div>
           </div>
