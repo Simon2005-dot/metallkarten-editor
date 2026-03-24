@@ -269,6 +269,20 @@ const backDefaultFields: Field[] = [
     y: 40,
     size: 110,
   },
+  {
+  id: 'back-nfc-icon',
+  type: 'logo',
+  label: 'NFC Symbol',
+  src: '/icons/nfc-tap-here.png',
+  originalSrc: '/icons/nfc-tap-here.png',
+  exportSrc: '/icons/nfc-tap-here.png',
+  x: 36,
+  y: STAGE_H - 150,
+  width: 95,
+  height: 95,
+  filename: 'nfc-tap-here.png',
+  removedBackground: false,
+},
 ];
 
 function clamp(value: number, min: number, max: number) {
