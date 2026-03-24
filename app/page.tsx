@@ -459,16 +459,16 @@ function qrSvgGroup(field: PreparedQrField) {
 }
 
 function logoToSvg(field: LogoField) {
-  if (field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
-    const scaleX = field.width / field.vectorWidth;
-    const scaleY = field.height / field.vectorHeight;
-    return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})">${field.vectorMarkup}</g>`;
+  if (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight) {
+    throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
   }
 
-  const href = field.exportSrc || field.src;
-  return `<image x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" href="${escapeAttribute(
-    href,
-  )}" xlink:href="${escapeAttribute(href)}" preserveAspectRatio="xMidYMid meet" />`;
+  const scaleX = field.width / field.vectorWidth;
+  const scaleY = field.height / field.vectorHeight;
+
+  return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="#000000" stroke="none">
+    ${field.vectorMarkup}
+  </g>`;
 }
 
 function fieldBounds(field: Field) {
@@ -501,30 +501,11 @@ function ensureBlackText(fields: Field[]) {
   });
 }
 
-async function normalizeLogoForExport(src: string) {
-  if (!src || src.startsWith('data:')) return src;
-
-  try {
-    const response = await fetch(src, { mode: 'cors' });
-    const blob = await response.blob();
-
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(String(reader.result || src));
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return src;
-  }
-}
-
 async function prepareFieldsForExport(fields: Field[]): Promise<PreparedField[]> {
   return Promise.all(
     ensureBlackText(fields).map(async (field) => {
       if (field.type === 'logo') {
-        const exportSrc = await normalizeLogoForExport(field.exportSrc || field.src);
-        return { ...field, exportSrc };
+        return field;
       }
 
       if (field.type === 'qr') {
@@ -1057,12 +1038,7 @@ async function traceImageToVectorAsset(
 
   const ctx = canvas.getContext('2d');
   if (!ctx) {
-    return {
-      previewSrc: src,
-      vectorMarkup: `<image href="${escapeAttribute(src)}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" />`,
-      vectorWidth: canvas.width || 1,
-      vectorHeight: canvas.height || 1,
-    };
+    throw new Error('Canvas-Kontext konnte nicht erstellt werden.');
   }
 
   ctx.drawImage(img, 0, 0);
@@ -1080,21 +1056,12 @@ async function traceImageToVectorAsset(
   const path = loopsToPath(loops);
 
   if (!path) {
-    const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}"><image href="${escapeAttribute(
-      src,
-    )}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" preserveAspectRatio="xMidYMid meet" /></svg>`;
-
-    return {
-      previewSrc: svgDataUrl(fallbackSvg),
-      vectorMarkup: `<image href="${escapeAttribute(src)}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" preserveAspectRatio="xMidYMid meet" />`,
-      vectorWidth: canvas.width || 1,
-      vectorHeight: canvas.height || 1,
-    };
+    throw new Error('Bild konnte nicht sinnvoll vektorisiert werden.');
   }
 
   const vectorWidth = Math.max(1, cropped.width);
   const vectorHeight = Math.max(1, cropped.height);
-  const vectorMarkup = `<path d="${path}" fill="black" fill-rule="evenodd" />`;
+  const vectorMarkup = `<path d="${path}" fill="#000000" fill-rule="evenodd" />`;
 
   const previewSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vectorWidth} ${vectorHeight}">
@@ -1412,6 +1379,24 @@ export default function MetallkartenEditor() {
             };
           }),
         );
+      } catch (error) {
+        console.error(error);
+        setPasteMessage('Bild konnte nicht sauber vektorisiert werden.');
+        window.setTimeout(() => setPasteMessage(''), 3000);
+
+        setCards((current) =>
+          current.map((card) => {
+            if (card.id !== currentActiveCardId) return card;
+
+            const remove = (list: Field[]) => list.filter((field) => field.id !== id);
+
+            return {
+              ...card,
+              frontFields: currentSide === 'front' ? remove(card.frontFields) : card.frontFields,
+              backFields: currentSide === 'back' ? remove(card.backFields) : card.backFields,
+            };
+          }),
+        );
       } finally {
         setIsProcessingImage(false);
       }
@@ -1560,7 +1545,7 @@ export default function MetallkartenEditor() {
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        nudgeSelected(event.shiftKey ? 10 : -1 + 2, 0);
+        nudgeSelected(event.shiftKey ? 10 : 1, 0);
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
@@ -1647,6 +1632,12 @@ export default function MetallkartenEditor() {
           cardName: card.name,
         });
 
+        if (frontSvg.includes('<image') || backSvg.includes('<image')) {
+          throw new Error(
+            'Export enthält noch Rasterbilder (<image>). Bitte alle Logos/Screenshots vollständig vektorisieren.',
+          );
+        }
+
         zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-vorderseite.svg`, frontSvg);
         zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-rueckseite.svg`, backSvg);
       }
@@ -1658,6 +1649,13 @@ export default function MetallkartenEditor() {
       a.download = `${cleanOrderNumber}-alle-karten.zip`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Beim Export ist ein Fehler aufgetreten.',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -2126,7 +2124,7 @@ export default function MetallkartenEditor() {
                       />
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
-                      Das Bild wird direkt im Editor getract und als Vektor exportiert.
+                      Das Bild wird direkt im Editor getract und als Pfad exportiert.
                     </div>
                   </>
                 )}
