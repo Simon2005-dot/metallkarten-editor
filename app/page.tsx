@@ -1996,9 +1996,8 @@ export default function MetallkartenEditor() {
             }}
           >
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              Screenshots, Logos und das NFC-Symbol werden automatisch hochskaliert und vektorisiert.
             </div>
           </div>
 
@@ -2025,7 +2024,7 @@ export default function MetallkartenEditor() {
               <input
                 value={orderNumber}
                 onChange={(e) => setOrderNumber(e.target.value)}
-                placeholder="Bestellnummer hier eingeben"
+                placeholder="Bestellnummer oder Firmenname hier eingeben"
                 style={inputStyle}
               />
             </div>
