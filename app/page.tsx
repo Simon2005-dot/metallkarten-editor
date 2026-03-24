@@ -52,6 +52,7 @@ type LogoField = BaseField & {
   vectorMarkup?: string;
   vectorWidth?: number;
   vectorHeight?: number;
+  vectorStatus?: 'idle' | 'processing' | 'ready' | 'error';
 };
 
 type Field = TextField | QrField | LogoField;
@@ -292,6 +293,7 @@ const backDefaultFields: Field[] = [
     height: 56,
     filename: 'nfc-tap-here.png',
     removedBackground: false,
+    vectorStatus: 'idle',
   },
 ];
 
@@ -344,10 +346,29 @@ function buildUniqueId(prefix: string) {
 }
 
 function cloneFields(fields: Field[]): Field[] {
-  return fields.map((field) => ({
-    ...field,
-    id: buildUniqueId(field.id),
-  }));
+  return fields.map((field) => {
+    if (field.type === 'logo') {
+      const originalSrc = field.originalSrc || field.src;
+      return {
+        ...field,
+        id: buildUniqueId(field.id),
+        src: originalSrc,
+        originalSrc,
+        exportSrc: originalSrc,
+        vectorMarkup: undefined,
+        vectorWidth: undefined,
+        vectorHeight: undefined,
+        removedBackground: false,
+        laserMode: 'original',
+        vectorStatus: 'idle',
+      };
+    }
+
+    return {
+      ...field,
+      id: buildUniqueId(field.id),
+    };
+  });
 }
 
 function createNewCardDesign(index = 1): CardDesign {
@@ -483,6 +504,26 @@ function fieldBounds(field: Field) {
 }
 
 function duplicateField(field: Field): Field {
+  if (field.type === 'logo') {
+    const originalSrc = field.originalSrc || field.src;
+    return {
+      ...field,
+      id: buildUniqueId(field.id),
+      label: `${field.label} Kopie`,
+      x: field.x + 16,
+      y: field.y + 16,
+      src: originalSrc,
+      originalSrc,
+      exportSrc: originalSrc,
+      vectorMarkup: undefined,
+      vectorWidth: undefined,
+      vectorHeight: undefined,
+      removedBackground: false,
+      laserMode: 'original',
+      vectorStatus: 'idle',
+    };
+  }
+
   return {
     ...field,
     id: buildUniqueId(field.id),
@@ -1281,6 +1322,73 @@ export default function MetallkartenEditor() {
     );
   };
 
+  const updateLogoFieldAcrossCards = (
+    cardId: string,
+    sideToUpdate: Side,
+    fieldId: string,
+    updater: (field: LogoField) => LogoField,
+  ) => {
+    setCards((current) =>
+      current.map((card) => {
+        if (card.id !== cardId) return card;
+
+        const updateList = (list: Field[]) =>
+          list.map((field) => {
+            if (field.id !== fieldId || field.type !== 'logo') return field;
+            return updater(field);
+          });
+
+        return {
+          ...card,
+          frontFields: sideToUpdate === 'front' ? updateList(card.frontFields) : card.frontFields,
+          backFields: sideToUpdate === 'back' ? updateList(card.backFields) : card.backFields,
+        };
+      }),
+    );
+  };
+
+  const vectorizeExistingLogo = async (
+    cardId: string,
+    sideToUpdate: Side,
+    field: LogoField,
+  ) => {
+    try {
+      updateLogoFieldAcrossCards(cardId, sideToUpdate, field.id, (currentField) => ({
+        ...currentField,
+        vectorStatus: 'processing',
+      }));
+
+      const traced = await traceImageToVectorAsset(field.originalSrc || field.src, {
+        whiteThreshold: field.threshold ?? 235,
+        laserThreshold: field.laserThreshold ?? 165,
+        upscaleMinWidth: 1600,
+        upscaleMinHeight: 900,
+        upscaleMaxScale: 4,
+        contrast: 40,
+      });
+
+      updateLogoFieldAcrossCards(cardId, sideToUpdate, field.id, (currentField) => ({
+        ...currentField,
+        src: traced.previewSrc,
+        originalSrc: currentField.originalSrc || currentField.src,
+        exportSrc: traced.previewSrc,
+        removedBackground: true,
+        laserMode: 'laser',
+        vectorMarkup: traced.vectorMarkup,
+        vectorWidth: traced.vectorWidth,
+        vectorHeight: traced.vectorHeight,
+        vectorStatus: 'ready',
+      }));
+    } catch (error) {
+      console.error(error);
+
+      updateLogoFieldAcrossCards(cardId, sideToUpdate, field.id, (currentField) => ({
+        ...currentField,
+        vectorStatus: 'error',
+      }));
+    }
+  };
+
   useEffect(() => {
     const qrFields = cards
       .flatMap((card) => [...card.frontFields, ...card.backFields])
@@ -1307,6 +1415,50 @@ export default function MetallkartenEditor() {
     return () => {
       active = false;
     };
+  }, [cards]);
+
+  useEffect(() => {
+    const logosToProcess: Array<{
+      cardId: string;
+      side: Side;
+      field: LogoField;
+    }> = [];
+
+    for (const card of cards) {
+      for (const field of card.frontFields) {
+        if (
+          field.type === 'logo' &&
+          !field.vectorMarkup &&
+          field.vectorStatus !== 'processing'
+        ) {
+          logosToProcess.push({
+            cardId: card.id,
+            side: 'front',
+            field,
+          });
+        }
+      }
+
+      for (const field of card.backFields) {
+        if (
+          field.type === 'logo' &&
+          !field.vectorMarkup &&
+          field.vectorStatus !== 'processing'
+        ) {
+          logosToProcess.push({
+            cardId: card.id,
+            side: 'back',
+            field,
+          });
+        }
+      }
+    }
+
+    if (logosToProcess.length === 0) return;
+
+    for (const item of logosToProcess) {
+      void vectorizeExistingLogo(item.cardId, item.side, item.field);
+    }
   }, [cards]);
 
   const updateField = (id: string, patch: Partial<Field>) => {
@@ -1421,6 +1573,7 @@ export default function MetallkartenEditor() {
       threshold: 235,
       laserThreshold: 165,
       laserMode: 'original',
+      vectorStatus: 'processing',
     };
 
     setFields((current) => [...current, baseLogo]);
@@ -1457,6 +1610,7 @@ export default function MetallkartenEditor() {
                       vectorMarkup: traced.vectorMarkup,
                       vectorWidth: traced.vectorWidth,
                       vectorHeight: traced.vectorHeight,
+                      vectorStatus: 'ready',
                     } as LogoField)
                   : field,
               );
@@ -1844,7 +1998,7 @@ export default function MetallkartenEditor() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              Screenshots und Logos werden beim Einfügen automatisch hochskaliert und vektorisiert.
+              Screenshots, Logos und das NFC-Symbol werden automatisch hochskaliert und vektorisiert.
             </div>
           </div>
 
@@ -2063,6 +2217,18 @@ export default function MetallkartenEditor() {
                   <div style={{ fontSize: 12, color: '#6b7280' }}>
                     {field.type} · X {pxToMm(field.x).toFixed(1)} mm · Y {pxToMm(field.y).toFixed(1)} mm
                   </div>
+                  {field.type === 'logo' ? (
+                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                      Status:{' '}
+                      {field.vectorStatus === 'ready'
+                        ? 'vektorisiert'
+                        : field.vectorStatus === 'processing'
+                        ? 'wird verarbeitet...'
+                        : field.vectorStatus === 'error'
+                        ? 'Fehler'
+                        : 'wartet'}
+                    </div>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -2214,6 +2380,18 @@ export default function MetallkartenEditor() {
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
                       Das Bild wird automatisch hochskaliert, kontrastverstärkt und als Pfad exportiert.
+                    </div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>
+                      Vektorstatus:{' '}
+                      <strong>
+                        {selected.vectorStatus === 'ready'
+                          ? 'vektorisiert'
+                          : selected.vectorStatus === 'processing'
+                          ? 'wird verarbeitet'
+                          : selected.vectorStatus === 'error'
+                          ? 'Fehler'
+                          : 'wartet'}
+                      </strong>
                     </div>
                   </>
                 )}
@@ -2675,8 +2853,25 @@ export default function MetallkartenEditor() {
                           maskSize: 'contain',
                           maskPosition: 'center',
                           backgroundColor: previewTextColor,
+                          opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
                         }}
                       />
+                      {field.vectorStatus === 'processing' ? (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 6,
+                            top: 6,
+                            fontSize: 10,
+                            background: 'rgba(17,24,39,0.85)',
+                            color: '#fff',
+                            borderRadius: 999,
+                            padding: '2px 6px',
+                          }}
+                        >
+                          Trace…
+                        </div>
+                      ) : null}
                       {isSelected ? (
                         <>
                           <SelectionBadge width={field.width} height={field.height} />
