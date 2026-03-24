@@ -721,6 +721,7 @@ export default function MetallkartenEditor() {
   const [activeCardId, setActiveCardId] = useState<string>(initialCard.id);
   const [side, setSide] = useState<Side>('front');
   const [selectedId, setSelectedId] = useState<string>(initialCard.frontFields[0]?.id || '');
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragState>(null);
   const [resizing, setResizing] = useState<ResizeState>(null);
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
@@ -883,6 +884,7 @@ export default function MetallkartenEditor() {
     setSelectedId(newCard.frontFields[0]?.id || '');
     setSide('front');
     setGuideLines([]);
+    setEditingTextId(null);
   };
 
   const duplicateActiveCard = () => {
@@ -899,6 +901,7 @@ export default function MetallkartenEditor() {
     setSelectedId(duplicated.frontFields[0]?.id || '');
     setSide('front');
     setGuideLines([]);
+    setEditingTextId(null);
   };
 
   const loadImageElement = (src: string) =>
@@ -933,6 +936,7 @@ export default function MetallkartenEditor() {
 
     setFields((current) => [...current, newLogo]);
     setSelectedId(id);
+    setEditingTextId(null);
 
     setTimeout(async () => {
       try {
@@ -1013,11 +1017,13 @@ export default function MetallkartenEditor() {
     const copy = duplicateField(selected);
     setFields((current) => [...current, copy]);
     setSelectedId(copy.id);
+    setEditingTextId(null);
   };
 
   const removeField = (id: string) => {
     setFields((current) => current.filter((f) => f.id !== id));
     setSelectedId((current) => (current === id ? fields[0]?.id || '' : current));
+    setEditingTextId((current) => (current === id ? null : current));
   };
 
   const onLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1040,6 +1046,7 @@ export default function MetallkartenEditor() {
   const onMouseDown = (event: React.MouseEvent<HTMLDivElement>, field: Field) => {
     const pos = pointerPos(event);
     setSelectedId(field.id);
+    setEditingTextId(null);
     setDragging({
       id: field.id,
       offsetX: pos.x - field.x,
@@ -1094,6 +1101,7 @@ export default function MetallkartenEditor() {
     if (!dragging) return;
     const field = fields.find((f) => f.id === dragging.id);
     if (!field) return;
+    if (editingTextId === field.id) return;
 
     const pos = pointerPos(event);
     const bounds = fieldBounds(field);
@@ -1132,6 +1140,10 @@ export default function MetallkartenEditor() {
       const tag = (event.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (!selected) return;
+
+      if (event.key === 'Escape') {
+        setEditingTextId(null);
+      }
 
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (!protectedIds.includes(selected.id)) removeField(selected.id);
@@ -1394,6 +1406,7 @@ export default function MetallkartenEditor() {
                       setSide('front');
                       setSelectedId(card.frontFields[0]?.id || '');
                       setGuideLines([]);
+                      setEditingTextId(null);
                     }}
                     style={{
                       border: isActive ? '1px solid #111827' : '1px solid #e5e7eb',
@@ -1540,7 +1553,10 @@ export default function MetallkartenEditor() {
               {visibleFields.map((field) => (
                 <button
                   key={field.id}
-                  onClick={() => setSelectedId(field.id)}
+                  onClick={() => {
+                    setSelectedId(field.id);
+                    setEditingTextId(null);
+                  }}
                   style={{
                     textAlign: 'left',
                     border: selectedId === field.id ? '1px solid #111827' : '1px solid #e5e7eb',
@@ -1649,9 +1665,7 @@ export default function MetallkartenEditor() {
                         max={36}
                         step={1}
                         value={selected.fontSize}
-                        onChange={(e) =>
-                          updateField(selected.id, { fontSize: Number(e.target.value) })
-                        }
+                        onChange={(e) => updateField(selected.id, { fontSize: Number(e.target.value) })}
                         style={{ width: '100%' }}
                       />
                     </div>
@@ -1849,6 +1863,7 @@ export default function MetallkartenEditor() {
                 setSide('front');
                 setSelectedId(activeCard.frontFields[0]?.id || '');
                 setGuideLines([]);
+                setEditingTextId(null);
               }}
               style={side === 'front' ? activeTabStyle : tabStyle}
             >
@@ -1859,6 +1874,7 @@ export default function MetallkartenEditor() {
                 setSide('back');
                 setSelectedId(activeCard.backFields[0]?.id || '');
                 setGuideLines([]);
+                setEditingTextId(null);
               }}
               style={side === 'back' ? activeTabStyle : tabStyle}
             >
@@ -1880,6 +1896,7 @@ export default function MetallkartenEditor() {
               onMouseMove={onMouseMove}
               onMouseUp={clearInteractionState}
               onMouseLeave={clearInteractionState}
+              onClick={() => setEditingTextId(null)}
               style={{
                 position: 'relative',
                 width: STAGE_W,
@@ -1953,34 +1970,118 @@ export default function MetallkartenEditor() {
                 if (field.type === 'text' || field.type === 'multiline') {
                   const lines = String(field.text || '').split('\n');
                   const fontFamily = FONT_OPTIONS[field.fontFamily] || FONT_OPTIONS[DEFAULT_FONT_FAMILY];
+                  const isEditing = editingTextId === field.id;
 
                   return (
                     <div
                       key={field.id}
-                      onMouseDown={(e) => onMouseDown(e, field)}
-                      onClick={() => setSelectedId(field.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                        setEditingTextId(field.id);
+                      }}
+                      onMouseDown={(e) => {
+                        if (isEditing) return;
+                        onMouseDown(e, field);
+                      }}
                       style={{
                         position: 'absolute',
-                        cursor: 'move',
+                        cursor: isEditing ? 'text' : 'move',
                         whiteSpace: 'pre',
                         outline: isSelected ? '2px solid #4f46e5' : 'none',
                         outlineOffset: 2,
                         left: field.x,
                         top: field.y,
-                        fontSize: field.fontSize,
-                        color: previewTextColor,
-                        fontWeight: field.fontWeight,
-                        lineHeight: 1.35,
-                        textAlign: field.align,
                         minWidth: 20,
-                        fontFamily,
-                        textShadow: '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
                       }}
                     >
-                      {lines.map((line, index) => (
-                        <div key={index}>{line}</div>
-                      ))}
-                      {isSelected ? <SelectionBadge width={bounds.width} height={bounds.height} /> : null}
+                      {isEditing ? (
+                        field.type === 'multiline' ? (
+                          <textarea
+                            autoFocus
+                            value={field.text}
+                            rows={Math.max(String(field.text || '').split('\n').length, 2)}
+                            onChange={(e) => updateField(field.id, { text: e.target.value })}
+                            onBlur={() => setEditingTextId(null)}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setEditingTextId(null);
+                              }
+                            }}
+                            style={{
+                              width: Math.max(bounds.width + 24, 140),
+                              minHeight: bounds.height + 18,
+                              resize: 'both',
+                              padding: '6px 8px',
+                              borderRadius: 8,
+                              border: '2px solid #4f46e5',
+                              background: 'rgba(255,255,255,0.96)',
+                              color: '#111827',
+                              fontSize: field.fontSize,
+                              fontWeight: field.fontWeight,
+                              lineHeight: 1.35,
+                              textAlign: field.align,
+                              fontFamily,
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        ) : (
+                          <input
+                            autoFocus
+                            value={field.text}
+                            onChange={(e) => updateField(field.id, { text: e.target.value })}
+                            onBlur={() => setEditingTextId(null)}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === 'Escape') {
+                                setEditingTextId(null);
+                              }
+                            }}
+                            style={{
+                              width: Math.max(bounds.width + 24, 140),
+                              padding: '6px 8px',
+                              borderRadius: 8,
+                              border: '2px solid #4f46e5',
+                              background: 'rgba(255,255,255,0.96)',
+                              color: '#111827',
+                              fontSize: field.fontSize,
+                              fontWeight: field.fontWeight,
+                              lineHeight: 1.35,
+                              textAlign: field.align,
+                              fontFamily,
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        )
+                      ) : (
+                        <div
+                          style={{
+                            fontSize: field.fontSize,
+                            color: previewTextColor,
+                            fontWeight: field.fontWeight,
+                            lineHeight: 1.35,
+                            textAlign: field.align,
+                            fontFamily,
+                            textShadow: '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
+                          }}
+                        >
+                          {lines.map((line, index) => (
+                            <div key={index}>{line}</div>
+                          ))}
+                        </div>
+                      )}
+                      {isSelected && !isEditing ? (
+                        <SelectionBadge width={bounds.width} height={bounds.height} />
+                      ) : null}
                     </div>
                   );
                 }
@@ -1990,7 +2091,11 @@ export default function MetallkartenEditor() {
                     <div
                       key={field.id}
                       onMouseDown={(e) => onMouseDown(e, field)}
-                      onClick={() => setSelectedId(field.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                        setEditingTextId(null);
+                      }}
                       style={{
                         position: 'absolute',
                         cursor: 'move',
@@ -2044,7 +2149,11 @@ export default function MetallkartenEditor() {
                     <div
                       key={field.id}
                       onMouseDown={(e) => onMouseDown(e, field)}
-                      onClick={() => setSelectedId(field.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                        setEditingTextId(null);
+                      }}
                       style={{
                         position: 'absolute',
                         cursor: 'move',
@@ -2125,7 +2234,7 @@ export default function MetallkartenEditor() {
               color: '#6b7280',
             }}
           >
-            <span>Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.</span>
+            <span>Vorschau aktiv. Doppelklick auf Text zum direkten Bearbeiten.</span>
             {isProcessingImage ? (
               <span style={{ color: '#2563eb', fontWeight: 700 }}>
                 Bild wird für Laser optimiert...
