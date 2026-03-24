@@ -49,6 +49,9 @@ type LogoField = BaseField & {
   threshold?: number;
   laserMode?: 'original' | 'no-bg' | 'laser';
   laserThreshold?: number;
+  vectorMarkup?: string;
+  vectorWidth?: number;
+  vectorHeight?: number;
 };
 
 type Field = TextField | QrField | LogoField;
@@ -84,6 +87,13 @@ type CardDesign = {
   showBackQr: boolean;
   frontFields: Field[];
   backFields: Field[];
+};
+
+type VectorTraceResult = {
+  previewSrc: string;
+  vectorMarkup: string;
+  vectorWidth: number;
+  vectorHeight: number;
 };
 
 const CARD_WIDTH = 85.6;
@@ -270,19 +280,19 @@ const backDefaultFields: Field[] = [
     size: 110,
   },
   {
-  id: 'back-nfc-icon',
-  type: 'logo',
-  label: 'NFC Symbol',
-  src: '/icons/nfc-tap-here.png',
-  originalSrc: '/icons/nfc-tap-here.png',
-  exportSrc: '/icons/nfc-tap-here.png',
-  x: 518,
-  y: 301,
-  width: 60,
-  height: 56,
-  filename: 'nfc-tap-here.png',
-  removedBackground: false,
-},
+    id: 'back-nfc-icon',
+    type: 'logo',
+    label: 'NFC Symbol',
+    src: '/icons/nfc-tap-here.png',
+    originalSrc: '/icons/nfc-tap-here.png',
+    exportSrc: '/icons/nfc-tap-here.png',
+    x: 518,
+    y: 301,
+    width: 60,
+    height: 56,
+    filename: 'nfc-tap-here.png',
+    removedBackground: false,
+  },
 ];
 
 function clamp(value: number, min: number, max: number) {
@@ -449,6 +459,12 @@ function qrSvgGroup(field: PreparedQrField) {
 }
 
 function logoToSvg(field: LogoField) {
+  if (field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
+    const scaleX = field.width / field.vectorWidth;
+    const scaleY = field.height / field.vectorHeight;
+    return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})">${field.vectorMarkup}</g>`;
+  }
+
   const href = field.exportSrc || field.src;
   return `<image x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" href="${escapeAttribute(
     href,
@@ -676,6 +692,420 @@ function snapPositionToOtherFields(
     x: snappedX,
     y: snappedY,
     guides: dedupeGuides(guides),
+  };
+}
+
+function loadImageElement(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function createBooleanMask(width: number, height: number, fill = false) {
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => fill));
+}
+
+function cloneMask(mask: boolean[][]) {
+  return mask.map((row) => [...row]);
+}
+
+function isMaskPixelOn(mask: boolean[][], x: number, y: number) {
+  if (y < 0 || y >= mask.length) return false;
+  if (x < 0 || x >= mask[0].length) return false;
+  return mask[y][x];
+}
+
+function removeIsolatedPixels(mask: boolean[][], minNeighbors = 2) {
+  const h = mask.length;
+  const w = mask[0]?.length || 0;
+  const next = cloneMask(mask);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y][x]) continue;
+
+      let neighbors = 0;
+      for (let yy = -1; yy <= 1; yy++) {
+        for (let xx = -1; xx <= 1; xx++) {
+          if (xx === 0 && yy === 0) continue;
+          if (isMaskPixelOn(mask, x + xx, y + yy)) neighbors++;
+        }
+      }
+
+      if (neighbors < minNeighbors) next[y][x] = false;
+    }
+  }
+
+  return next;
+}
+
+function dilateMask(mask: boolean[][], radius = 1) {
+  const h = mask.length;
+  const w = mask[0]?.length || 0;
+  const next = createBooleanMask(w, h, false);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y][x]) continue;
+
+      for (let yy = -radius; yy <= radius; yy++) {
+        for (let xx = -radius; xx <= radius; xx++) {
+          const nx = x + xx;
+          const ny = y + yy;
+          if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
+            next[ny][nx] = true;
+          }
+        }
+      }
+    }
+  }
+
+  return next;
+}
+
+function erodeMask(mask: boolean[][], radius = 1) {
+  const h = mask.length;
+  const w = mask[0]?.length || 0;
+  const next = createBooleanMask(w, h, false);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let keep = true;
+
+      for (let yy = -radius; yy <= radius && keep; yy++) {
+        for (let xx = -radius; xx <= radius; xx++) {
+          const nx = x + xx;
+          const ny = y + yy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h || !mask[ny][nx]) {
+            keep = false;
+            break;
+          }
+        }
+      }
+
+      next[y][x] = keep;
+    }
+  }
+
+  return next;
+}
+
+function closeMask(mask: boolean[][], radius = 1) {
+  return erodeMask(dilateMask(mask, radius), radius);
+}
+
+function findMaskBounds(mask: boolean[][]) {
+  const h = mask.length;
+  const w = mask[0]?.length || 0;
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y][x]) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return { minX: 0, minY: 0, maxX: w - 1, maxY: h - 1, isEmpty: true };
+  }
+
+  return { minX, minY, maxX, maxY, isEmpty: false };
+}
+
+function cropMask(mask: boolean[][], padding = 2) {
+  const bounds = findMaskBounds(mask);
+  const h = mask.length;
+  const w = mask[0]?.length || 0;
+
+  if (bounds.isEmpty) {
+    return {
+      mask,
+      offsetX: 0,
+      offsetY: 0,
+      width: w,
+      height: h,
+    };
+  }
+
+  const minX = Math.max(0, bounds.minX - padding);
+  const minY = Math.max(0, bounds.minY - padding);
+  const maxX = Math.min(w - 1, bounds.maxX + padding);
+  const maxY = Math.min(h - 1, bounds.maxY + padding);
+
+  const cropped: boolean[][] = [];
+  for (let y = minY; y <= maxY; y++) {
+    cropped.push(mask[y].slice(minX, maxX + 1));
+  }
+
+  return {
+    mask: cropped,
+    offsetX: minX,
+    offsetY: minY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
+}
+
+function maskFromImageData(
+  imageData: ImageData,
+  whiteThreshold = 235,
+  laserThreshold = 165,
+) {
+  const { width, height, data } = imageData;
+  const mask = createBooleanMask(width, height, false);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+
+      if (a < 20) {
+        mask[y][x] = false;
+        continue;
+      }
+
+      const isNearWhite = r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold;
+      if (isNearWhite) {
+        mask[y][x] = false;
+        continue;
+      }
+
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      mask[y][x] = gray < laserThreshold;
+    }
+  }
+
+  const cleaned = removeIsolatedPixels(mask, 2);
+  const closed = closeMask(cleaned, 1);
+  return removeIsolatedPixels(closed, 2);
+}
+
+type Edge = {
+  sx: number;
+  sy: number;
+  ex: number;
+  ey: number;
+};
+
+function buildEdgesFromMask(mask: boolean[][]) {
+  const h = mask.length;
+  const w = mask[0]?.length || 0;
+  const edges: Edge[] = [];
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y][x]) continue;
+
+      if (!isMaskPixelOn(mask, x, y - 1)) {
+        edges.push({ sx: x, sy: y, ex: x + 1, ey: y });
+      }
+      if (!isMaskPixelOn(mask, x + 1, y)) {
+        edges.push({ sx: x + 1, sy: y, ex: x + 1, ey: y + 1 });
+      }
+      if (!isMaskPixelOn(mask, x, y + 1)) {
+        edges.push({ sx: x + 1, sy: y + 1, ex: x, ey: y + 1 });
+      }
+      if (!isMaskPixelOn(mask, x - 1, y)) {
+        edges.push({ sx: x, sy: y + 1, ex: x, ey: y });
+      }
+    }
+  }
+
+  return edges;
+}
+
+function pointKey(x: number, y: number) {
+  return `${x},${y}`;
+}
+
+function signedArea(points: Array<{ x: number; y: number }>) {
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  return area / 2;
+}
+
+function simplifyCollinear(points: Array<{ x: number; y: number }>) {
+  if (points.length <= 3) return points;
+
+  const result: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < points.length; i++) {
+    const prev = points[(i - 1 + points.length) % points.length];
+    const curr = points[i];
+    const next = points[(i + 1) % points.length];
+
+    const dx1 = curr.x - prev.x;
+    const dy1 = curr.y - prev.y;
+    const dx2 = next.x - curr.x;
+    const dy2 = next.y - curr.y;
+
+    const isCollinear = dx1 * dy2 === dy1 * dx2;
+    const sameDirection =
+      Math.sign(dx1) === Math.sign(dx2) || dx1 === 0 || dx2 === 0
+        ? Math.sign(dy1) === Math.sign(dy2) || dy1 === 0 || dy2 === 0
+        : false;
+
+    if (isCollinear && sameDirection) continue;
+    result.push(curr);
+  }
+
+  return result.length >= 3 ? result : points;
+}
+
+function edgesToLoops(edges: Edge[]) {
+  const byStart = new Map<string, Edge[]>();
+
+  for (const edge of edges) {
+    const key = pointKey(edge.sx, edge.sy);
+    const list = byStart.get(key) || [];
+    list.push(edge);
+    byStart.set(key, list);
+  }
+
+  const used = new Set<string>();
+  const loops: Array<Array<{ x: number; y: number }>> = [];
+
+  function edgeId(edge: Edge) {
+    return `${edge.sx},${edge.sy}->${edge.ex},${edge.ey}`;
+  }
+
+  for (const edge of edges) {
+    const startId = edgeId(edge);
+    if (used.has(startId)) continue;
+
+    const loop: Array<{ x: number; y: number }> = [];
+    let current = edge;
+
+    while (current) {
+      const id = edgeId(current);
+      if (used.has(id)) break;
+      used.add(id);
+
+      loop.push({ x: current.sx, y: current.sy });
+
+      const nextKey = pointKey(current.ex, current.ey);
+      const candidates = byStart.get(nextKey) || [];
+      const nextEdge = candidates.find((candidate) => !used.has(edgeId(candidate)));
+
+      if (!nextEdge) {
+        loop.push({ x: current.ex, y: current.ey });
+        break;
+      }
+
+      current = nextEdge;
+
+      if (
+        loop.length > 2 &&
+        current.sx === loop[0].x &&
+        current.sy === loop[0].y &&
+        current.ex === loop[1]?.x &&
+        current.ey === loop[1]?.y
+      ) {
+        break;
+      }
+    }
+
+    const simplified = simplifyCollinear(loop);
+    if (simplified.length >= 3) loops.push(simplified);
+  }
+
+  return loops;
+}
+
+function loopsToPath(loops: Array<Array<{ x: number; y: number }>>) {
+  return loops
+    .filter((loop) => Math.abs(signedArea(loop)) >= 1)
+    .map((loop) => {
+      const first = loop[0];
+      const rest = loop.slice(1);
+      return `M ${first.x} ${first.y} ${rest.map((p) => `L ${p.x} ${p.y}`).join(' ')} Z`;
+    })
+    .join(' ');
+}
+
+function svgDataUrl(svg: string) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+async function traceImageToVectorAsset(
+  src: string,
+  options?: {
+    whiteThreshold?: number;
+    laserThreshold?: number;
+  },
+): Promise<VectorTraceResult> {
+  const img = await loadImageElement(src);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return {
+      previewSrc: src,
+      vectorMarkup: `<image href="${escapeAttribute(src)}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" />`,
+      vectorWidth: canvas.width || 1,
+      vectorHeight: canvas.height || 1,
+    };
+  }
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  const mask = maskFromImageData(
+    imageData,
+    options?.whiteThreshold ?? 235,
+    options?.laserThreshold ?? 165,
+  );
+
+  const cropped = cropMask(mask, 2);
+  const edges = buildEdgesFromMask(cropped.mask);
+  const loops = edgesToLoops(edges);
+  const path = loopsToPath(loops);
+
+  if (!path) {
+    const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}"><image href="${escapeAttribute(
+      src,
+    )}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" preserveAspectRatio="xMidYMid meet" /></svg>`;
+
+    return {
+      previewSrc: svgDataUrl(fallbackSvg),
+      vectorMarkup: `<image href="${escapeAttribute(src)}" x="0" y="0" width="${canvas.width}" height="${canvas.height}" preserveAspectRatio="xMidYMid meet" />`,
+      vectorWidth: canvas.width || 1,
+      vectorHeight: canvas.height || 1,
+    };
+  }
+
+  const vectorWidth = Math.max(1, cropped.width);
+  const vectorHeight = Math.max(1, cropped.height);
+  const vectorMarkup = `<path d="${path}" fill="black" fill-rule="evenodd" />`;
+
+  const previewSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vectorWidth} ${vectorHeight}">
+  ${vectorMarkup}
+</svg>`;
+
+  return {
+    previewSrc: svgDataUrl(previewSvg),
+    vectorMarkup,
+    vectorWidth,
+    vectorHeight,
   };
 }
 
@@ -918,27 +1348,18 @@ export default function MetallkartenEditor() {
     setEditingTextId(null);
   };
 
-  const loadImageElement = (src: string) =>
-    new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = src;
-    });
-
   const addLogoFromSource = async (src: string, filename: string) => {
-    const exportSrc = await normalizeLogoForExport(src);
     const id = buildUniqueId('logo');
     const currentActiveCardId = activeCardId;
     const currentSide = side;
 
-    const newLogo: LogoField = {
+    const baseLogo: LogoField = {
       id,
       type: 'logo',
       label: filename.toLowerCase().includes('screenshot') ? 'Screenshot Logo' : 'Logo',
       src,
       originalSrc: src,
-      exportSrc,
+      exportSrc: src,
       x: STAGE_W - 180,
       y: 24,
       width: 140,
@@ -946,54 +1367,22 @@ export default function MetallkartenEditor() {
       filename,
       removedBackground: false,
       threshold: 235,
+      laserThreshold: 165,
+      laserMode: 'original',
     };
 
-    setFields((current) => [...current, newLogo]);
+    setFields((current) => [...current, baseLogo]);
     setSelectedId(id);
     setEditingTextId(null);
 
     setTimeout(async () => {
       try {
         setIsProcessingImage(true);
-        const img = await loadImageElement(src);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
 
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        const whiteThreshold = 235;
-        const laserThreshold = 160;
-
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const alpha = data[i + 3];
-
-          const isNearWhite = r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold;
-          if (isNearWhite) {
-            data[i + 3] = 0;
-            continue;
-          }
-
-          if (alpha === 0) continue;
-
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-          const isDark = gray < laserThreshold;
-          const value = isDark ? 0 : 255;
-
-          data[i] = value;
-          data[i + 1] = value;
-          data[i + 2] = value;
-          data[i + 3] = isDark ? 255 : 0;
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-        const laserReady = canvas.toDataURL('image/png');
+        const traced = await traceImageToVectorAsset(src, {
+          whiteThreshold: 235,
+          laserThreshold: 165,
+        });
 
         setCards((current) =>
           current.map((card) => {
@@ -1004,11 +1393,14 @@ export default function MetallkartenEditor() {
                 field.id === id
                   ? ({
                       ...field,
-                      src: laserReady,
+                      src: traced.previewSrc,
                       originalSrc: src,
-                      exportSrc: laserReady,
+                      exportSrc: traced.previewSrc,
                       removedBackground: true,
                       laserMode: 'laser',
+                      vectorMarkup: traced.vectorMarkup,
+                      vectorWidth: traced.vectorWidth,
+                      vectorHeight: traced.vectorHeight,
                     } as LogoField)
                   : field,
               );
@@ -1168,7 +1560,7 @@ export default function MetallkartenEditor() {
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        nudgeSelected(event.shiftKey ? 10 : 1, 0);
+        nudgeSelected(event.shiftKey ? 10 : -1 + 2, 0);
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
@@ -1196,8 +1588,8 @@ export default function MetallkartenEditor() {
         const reader = new FileReader();
         reader.onload = async () => {
           await addLogoFromSource(String(reader.result), `screenshot-${Date.now()}.png`);
-          setPasteMessage('Screenshot als Logo eingefügt.');
-          window.setTimeout(() => setPasteMessage(''), 2500);
+          setPasteMessage('Screenshot wurde eingefügt und direkt vektorisiert.');
+          window.setTimeout(() => setPasteMessage(''), 3000);
         };
         reader.readAsDataURL(file);
         break;
@@ -1365,6 +1757,7 @@ export default function MetallkartenEditor() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
+              Screenshots und Logos werden beim Einfügen direkt vektorisiert.
             </div>
           </div>
 
@@ -1505,16 +1898,13 @@ export default function MetallkartenEditor() {
                 onChange={(e) => setSnapToGrid(e.target.checked)}
               />
             </label>
-<label style={toggleRowStyle}>
-  <span>QR Vorderseite</span>
-  <input
-    type="checkbox"
-    checked={activeCard.showFrontQr ?? false}
-    onChange={(e) =>
-      updateActiveCard({ showFrontQr: e.target.checked })
-    }
-  />
-
+            <label style={toggleRowStyle}>
+              <span>QR Vorderseite</span>
+              <input
+                type="checkbox"
+                checked={activeCard.showFrontQr ?? false}
+                onChange={(e) => updateActiveCard({ showFrontQr: e.target.checked })}
+              />
             </label>
             <label style={toggleRowStyle}>
               <span>QR Rückseite</span>
@@ -1736,7 +2126,7 @@ export default function MetallkartenEditor() {
                       />
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
-                      Das Bild wird automatisch für den Laser optimiert.
+                      Das Bild wird direkt im Editor getract und als Vektor exportiert.
                     </div>
                   </>
                 )}
@@ -2253,7 +2643,7 @@ export default function MetallkartenEditor() {
             <span>Vorschau aktiv. Doppelklick auf Text zum direkten Bearbeiten.</span>
             {isProcessingImage ? (
               <span style={{ color: '#2563eb', fontWeight: 700 }}>
-                Bild wird für Laser optimiert...
+                Bild wird direkt in Vektor-Konturen umgewandelt...
               </span>
             ) : null}
           </div>
