@@ -332,7 +332,7 @@ function createNewCardDesign(index = 1): CardDesign {
     name: `Karte ${index}`,
     cardFinish: 'black',
     showFrontQr: false,
-    showBackQr: false,
+    showBackQr: true,
     frontFields: cloneFields(frontDefaultFields),
     backFields: cloneFields(backDefaultFields),
   };
