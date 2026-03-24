@@ -4,6 +4,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import JSZip from 'jszip';
 
+type FontFamilyKey =
+  | 'arial'
+  | 'helvetica'
+  | 'times'
+  | 'georgia'
+  | 'verdana'
+  | 'tahoma'
+  | 'trebuchet'
+  | 'courier';
+
 type BaseField = {
   id: string;
   label: string;
@@ -18,6 +28,7 @@ type TextField = BaseField & {
   fontWeight: number;
   align: 'left' | 'center' | 'right';
   color?: string;
+  fontFamily: FontFamilyKey;
 };
 
 type QrField = BaseField & {
@@ -83,8 +94,31 @@ const STAGE_H = Math.round(CARD_HEIGHT * PX_PER_MM);
 const SAFE_MARGIN_MM = 3;
 const SAFE_MARGIN = SAFE_MARGIN_MM * PX_PER_MM;
 const DEFAULT_TEXT_COLOR = '#000000';
+const DEFAULT_FONT_FAMILY: FontFamilyKey = 'arial';
 const SNAP_THRESHOLD = 6;
 const GRID_SIZE = 4;
+
+const FONT_OPTIONS: Record<FontFamilyKey, string> = {
+  arial: 'Arial, Helvetica, sans-serif',
+  helvetica: 'Helvetica, Arial, sans-serif',
+  times: '"Times New Roman", Times, serif',
+  georgia: 'Georgia, serif',
+  verdana: 'Verdana, Geneva, sans-serif',
+  tahoma: 'Tahoma, Geneva, sans-serif',
+  trebuchet: '"Trebuchet MS", sans-serif',
+  courier: '"Courier New", Courier, monospace',
+};
+
+const FONT_LABELS: Record<FontFamilyKey, string> = {
+  arial: 'Arial',
+  helvetica: 'Helvetica',
+  times: 'Times New Roman',
+  georgia: 'Georgia',
+  verdana: 'Verdana',
+  tahoma: 'Tahoma',
+  trebuchet: 'Trebuchet MS',
+  courier: 'Courier New',
+};
 
 const CARD_BACKGROUNDS: Record<CardFinishKey, string> = {
   black: '/card-backgrounds/black.png',
@@ -147,6 +181,7 @@ const frontDefaultFields: Field[] = [
     fontWeight: 700,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
     id: 'role',
@@ -159,6 +194,7 @@ const frontDefaultFields: Field[] = [
     fontWeight: 500,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
     id: 'company',
@@ -171,6 +207,7 @@ const frontDefaultFields: Field[] = [
     fontWeight: 600,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
     id: 'contact',
@@ -183,6 +220,7 @@ const frontDefaultFields: Field[] = [
     fontWeight: 400,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
     id: 'qr-front',
@@ -207,6 +245,7 @@ const backDefaultFields: Field[] = [
     fontWeight: 700,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
     id: 'back-sub',
@@ -219,6 +258,7 @@ const backDefaultFields: Field[] = [
     fontWeight: 400,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
     id: 'back-qr',
@@ -360,11 +400,16 @@ function textToSvg(field: TextField) {
   const lines = String(field.text || '').split('\n');
   const anchor = field.align === 'center' ? 'middle' : field.align === 'right' ? 'end' : 'start';
   const fill = field.color || DEFAULT_TEXT_COLOR;
+  const fontFamily = FONT_OPTIONS[field.fontFamily] || FONT_OPTIONS[DEFAULT_FONT_FAMILY];
 
   return lines
     .map((line, index) => {
       const y = field.y + index * (field.fontSize * 1.35) + field.fontSize;
-      return `<text x="${field.x}" y="${y}" font-size="${field.fontSize}" font-family="Arial, Helvetica, sans-serif" font-weight="${field.fontWeight}" text-anchor="${anchor}" fill="${escapeAttribute(fill)}">${escapeXml(line)}</text>`;
+      return `<text x="${field.x}" y="${y}" font-size="${field.fontSize}" font-family="${escapeAttribute(
+        fontFamily,
+      )}" font-weight="${field.fontWeight}" text-anchor="${anchor}" fill="${escapeAttribute(
+        fill,
+      )}">${escapeXml(line)}</text>`;
     })
     .join('');
 }
@@ -391,7 +436,9 @@ function qrSvgGroup(field: PreparedQrField) {
 
 function logoToSvg(field: LogoField) {
   const href = field.exportSrc || field.src;
-  return `<image x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" href="${escapeAttribute(href)}" xlink:href="${escapeAttribute(href)}" preserveAspectRatio="xMidYMid meet" />`;
+  return `<image x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" href="${escapeAttribute(
+    href,
+  )}" xlink:href="${escapeAttribute(href)}" preserveAspectRatio="xMidYMid meet" />`;
 }
 
 function fieldBounds(field: Field) {
@@ -689,6 +736,7 @@ export default function MetallkartenEditor() {
   );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [qrMatrices, setQrMatrices] = useState<Record<string, boolean[][]>>({});
+  const [editingCardNameId, setEditingCardNameId] = useState<string | null>(null);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const activeCard = cards.find((card) => card.id === activeCardId) || cards[0];
@@ -711,10 +759,12 @@ export default function MetallkartenEditor() {
   const frameStyle = CARD_FRAME_STYLES[activeCard.cardFinish];
   const protectedIds = fields.slice(0, 5).map((f) => f.id);
 
+  const updateCardById = (cardId: string, patch: Partial<CardDesign>) => {
+    setCards((current) => current.map((card) => (card.id === cardId ? { ...card, ...patch } : card)));
+  };
+
   const updateActiveCard = (patch: Partial<CardDesign>) => {
-    setCards((current) =>
-      current.map((card) => (card.id === activeCardId ? { ...card, ...patch } : card)),
-    );
+    updateCardById(activeCardId, patch);
   };
 
   const updateActiveCardFields = (sideToUpdate: Side, updater: (fields: Field[]) => Field[]) => {
@@ -752,9 +802,7 @@ export default function MetallkartenEditor() {
           const matrix = await buildQrMatrix(field.text || 'placeholder');
           return [
             field.id,
-            matrix && matrix.length > 0
-              ? matrix
-              : fallbackQrMatrix(field.text || 'placeholder'),
+            matrix && matrix.length > 0 ? matrix : fallbackQrMatrix(field.text || 'placeholder'),
           ] as const;
         }),
       );
@@ -793,6 +841,7 @@ export default function MetallkartenEditor() {
       fontWeight: 500,
       align: 'left',
       color: DEFAULT_TEXT_COLOR,
+      fontFamily: DEFAULT_FONT_FAMILY,
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
@@ -812,6 +861,7 @@ export default function MetallkartenEditor() {
       fontWeight: 400,
       align: 'left',
       color: DEFAULT_TEXT_COLOR,
+      fontFamily: DEFAULT_FONT_FAMILY,
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
@@ -842,6 +892,7 @@ export default function MetallkartenEditor() {
     setSide('front');
     setGuideLines([]);
     setActiveSection('setup');
+    setEditingCardNameId(newCard.id);
   };
 
   const duplicateActiveCard = () => {
@@ -859,6 +910,7 @@ export default function MetallkartenEditor() {
     setSide('front');
     setGuideLines([]);
     setActiveSection('setup');
+    setEditingCardNameId(duplicated.id);
   };
 
   const removeActiveCard = () => {
@@ -870,6 +922,7 @@ export default function MetallkartenEditor() {
     setSelectedId(nextCard.frontFields[0]?.id || '');
     setSide('front');
     setGuideLines([]);
+    setEditingCardNameId(null);
   };
 
   const loadImageElement = (src: string) =>
@@ -883,6 +936,9 @@ export default function MetallkartenEditor() {
   const addLogoFromSource = async (src: string, filename: string) => {
     const exportSrc = await normalizeLogoForExport(src);
     const id = buildUniqueId('logo');
+    const currentActiveCardId = activeCardId;
+    const currentSide = side;
+
     const newLogo: LogoField = {
       id,
       type: 'logo',
@@ -948,7 +1004,7 @@ export default function MetallkartenEditor() {
 
         setCards((current) =>
           current.map((card) => {
-            if (card.id !== activeCardId) return card;
+            if (card.id !== currentActiveCardId) return card;
 
             const update = (list: Field[]) =>
               list.map((field) =>
@@ -966,8 +1022,8 @@ export default function MetallkartenEditor() {
 
             return {
               ...card,
-              frontFields: side === 'front' ? update(card.frontFields) : card.frontFields,
-              backFields: side === 'back' ? update(card.backFields) : card.backFields,
+              frontFields: currentSide === 'front' ? update(card.frontFields) : card.frontFields,
+              backFields: currentSide === 'back' ? update(card.backFields) : card.backFields,
             };
           }),
         );
@@ -1311,7 +1367,7 @@ export default function MetallkartenEditor() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              Ein Kunde kann mehrere Karten innerhalb einer Bestellung anlegen und gesammelt exportieren.
+              Kartennamen können direkt in der Kartenliste geändert werden.
             </div>
           </div>
 
@@ -1347,7 +1403,7 @@ export default function MetallkartenEditor() {
             </div>
           </Panel>
 
-          <Panel title="Karten" subtitle="Ein Kunde kann mehrere Karten in einem Auftrag anlegen">
+          <Panel title="Karten" subtitle="Name direkt in der Liste anklicken und ändern">
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={addNewCard} style={{ ...buttonStyle, flex: 1 }}>
                 Neue Karte
@@ -1369,32 +1425,87 @@ export default function MetallkartenEditor() {
               Aktive Karte löschen
             </button>
 
-            <div style={{ display: 'grid', gap: 8, maxHeight: 260, overflow: 'auto' }}>
-              {cards.map((card) => (
-                <button
-                  key={card.id}
-                  onClick={() => {
-                    setActiveCardId(card.id);
-                    setSide('front');
-                    setSelectedId(card.frontFields[0]?.id || '');
-                    setGuideLines([]);
-                  }}
-                  style={{
-                    textAlign: 'left',
-                    border: activeCardId === card.id ? '1px solid #111827' : '1px solid #e5e7eb',
-                    background: activeCardId === card.id ? '#eef2ff' : '#fafafa',
-                    borderRadius: 12,
-                    padding: 10,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ fontWeight: 700 }}>{card.name}</div>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>
-                    {CARD_LABELS[card.cardFinish]} · {card.frontFields.length + card.backFields.length}{' '}
-                    Elemente
+            <div style={{ display: 'grid', gap: 8, maxHeight: 300, overflow: 'auto' }}>
+              {cards.map((card) => {
+                const isActive = activeCardId === card.id;
+                const isEditing = editingCardNameId === card.id;
+
+                return (
+                  <div
+                    key={card.id}
+                    style={{
+                      border: isActive ? '1px solid #111827' : '1px solid #e5e7eb',
+                      background: isActive ? '#eef2ff' : '#fafafa',
+                      borderRadius: 12,
+                      padding: 10,
+                      display: 'grid',
+                      gap: 6,
+                    }}
+                  >
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={card.name}
+                        onChange={(e) => updateCardById(card.id, { name: e.target.value })}
+                        onBlur={() => setEditingCardNameId(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setEditingCardNameId(null);
+                          }
+                          if (e.key === 'Escape') {
+                            setEditingCardNameId(null);
+                          }
+                        }}
+                        style={{
+                          ...inputStyle,
+                          marginTop: 0,
+                          fontWeight: 700,
+                        }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setActiveCardId(card.id);
+                          setSide('front');
+                          setSelectedId(card.frontFields[0]?.id || '');
+                          setGuideLines([]);
+                        }}
+                        onDoubleClick={() => setEditingCardNameId(card.id)}
+                        style={{
+                          textAlign: 'left',
+                          border: 'none',
+                          background: 'transparent',
+                          padding: 0,
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          fontSize: 14,
+                          color: '#111827',
+                        }}
+                        title="Doppelklick zum Umbenennen"
+                      >
+                        {card.name}
+                      </button>
+                    )}
+
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>
+                      {CARD_LABELS[card.cardFinish]} · {card.frontFields.length + card.backFields.length} Elemente
+                    </div>
+
+                    {!isEditing ? (
+                      <button
+                        onClick={() => setEditingCardNameId(card.id)}
+                        style={{
+                          ...buttonStyle,
+                          padding: '8px 10px',
+                          fontSize: 12,
+                        }}
+                      >
+                        Namen ändern
+                      </button>
+                    ) : null}
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </Panel>
 
@@ -1569,164 +1680,170 @@ export default function MetallkartenEditor() {
             <Panel title={selected ? `Ausgewählt: ${selected.label}` : 'Kein Element ausgewählt'}>
               {selected ? (
                 <>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={duplicateSelected} style={{ ...buttonStyle, flex: 1 }}>
-                      Duplizieren
-                    </button>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <label>X Position (mm)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={pxToMm(selected.x).toFixed(1)}
+                          onChange={(e) => updateField(selected.id, { x: mmToPx(Number(e.target.value)) })}
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label>Y Position (mm)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={pxToMm(selected.y).toFixed(1)}
+                          onChange={(e) => updateField(selected.id, { y: mmToPx(Number(e.target.value)) })}
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+
+                    {(selected.type === 'text' || selected.type === 'multiline') && (
+                      <>
+                        <div>
+                          <label>Text</label>
+                          {selected.type === 'multiline' ? (
+                            <textarea
+                              value={selected.text}
+                              onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                              rows={4}
+                              style={inputStyle}
+                            />
+                          ) : (
+                            <input
+                              value={selected.text}
+                              onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                              style={inputStyle}
+                            />
+                          )}
+                        </div>
+
+                        <div>
+                          <label>Schriftart</label>
+                          <select
+                            value={selected.fontFamily}
+                            onChange={(e) =>
+                              updateField(selected.id, {
+                                fontFamily: e.target.value as FontFamilyKey,
+                              })
+                            }
+                            style={inputStyle}
+                          >
+                            {Object.entries(FONT_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label>Ausrichtung</label>
+                          <select
+                            value={selected.align}
+                            onChange={(e) =>
+                              updateField(selected.id, {
+                                align: e.target.value as 'left' | 'center' | 'right',
+                              })
+                            }
+                            style={inputStyle}
+                          >
+                            <option value="left">Links</option>
+                            <option value="center">Zentriert</option>
+                            <option value="right">Rechts</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label>Schriftgröße: {selected.fontSize}px</label>
+                          <input
+                            type="range"
+                            min={8}
+                            max={36}
+                            step={1}
+                            value={selected.fontSize}
+                            onChange={(e) =>
+                              updateField(selected.id, { fontSize: Number(e.target.value) })
+                            }
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+
+                        <div>
+                          <label>Stärke: {selected.fontWeight}</label>
+                          <input
+                            type="range"
+                            min={300}
+                            max={800}
+                            step={100}
+                            value={selected.fontWeight}
+                            onChange={(e) =>
+                              updateField(selected.id, { fontWeight: Number(e.target.value) })
+                            }
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {selected.type === 'qr' && (
+                      <>
+                        <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+                          Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
+                        </div>
+                        <div>
+                          <label>
+                            Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)
+                          </label>
+                          <input
+                            type="range"
+                            min={48}
+                            max={240}
+                            step={2}
+                            value={selected.size}
+                            onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {selected.type === 'logo' && (
+                      <>
+                        <div>
+                          <label>Datei</label>
+                          <input
+                            value={selected.filename}
+                            readOnly
+                            style={{ ...inputStyle, background: '#f9fafb' }}
+                          />
+                        </div>
+                        <div style={{ fontSize: 13, color: '#6b7280' }}>
+                          Das Bild wird automatisch für den Laser optimiert.
+                        </div>
+                      </>
+                    )}
+
                     {!protectedIds.includes(selected.id) ? (
                       <button
                         onClick={() => removeField(selected.id)}
                         style={{
                           ...buttonStyle,
-                          flex: 1,
                           background: '#dc2626',
                           color: '#fff',
                           borderColor: '#dc2626',
                         }}
                       >
-                        Löschen
+                        Element löschen
                       </button>
                     ) : null}
                   </div>
-
-                  <div>
-                    <label>Bezeichnung</label>
-                    <input
-                      value={selected.label}
-                      onChange={(e) => updateField(selected.id, { label: e.target.value })}
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div>
-                      <label>X Position (mm)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={pxToMm(selected.x).toFixed(1)}
-                        onChange={(e) => updateField(selected.id, { x: mmToPx(Number(e.target.value)) })}
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div>
-                      <label>Y Position (mm)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={pxToMm(selected.y).toFixed(1)}
-                        onChange={(e) => updateField(selected.id, { y: mmToPx(Number(e.target.value)) })}
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
-
-                  {(selected.type === 'text' || selected.type === 'multiline') && (
-                    <>
-                      <div>
-                        <label>Text</label>
-                        {selected.type === 'multiline' ? (
-                          <textarea
-                            value={selected.text}
-                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
-                            rows={4}
-                            style={inputStyle}
-                          />
-                        ) : (
-                          <input
-                            value={selected.text}
-                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
-                            style={inputStyle}
-                          />
-                        )}
-                      </div>
-
-                      <div>
-                        <label>Ausrichtung</label>
-                        <select
-                          value={selected.align}
-                          onChange={(e) =>
-                            updateField(selected.id, {
-                              align: e.target.value as 'left' | 'center' | 'right',
-                            })
-                          }
-                          style={inputStyle}
-                        >
-                          <option value="left">Links</option>
-                          <option value="center">Zentriert</option>
-                          <option value="right">Rechts</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label>Schriftgröße: {selected.fontSize}px</label>
-                        <input
-                          type="range"
-                          min={8}
-                          max={36}
-                          step={1}
-                          value={selected.fontSize}
-                          onChange={(e) =>
-                            updateField(selected.id, { fontSize: Number(e.target.value) })
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-
-                      <div>
-                        <label>Stärke: {selected.fontWeight}</label>
-                        <input
-                          type="range"
-                          min={300}
-                          max={800}
-                          step={100}
-                          value={selected.fontWeight}
-                          onChange={(e) =>
-                            updateField(selected.id, { fontWeight: Number(e.target.value) })
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {selected.type === 'qr' && (
-                    <>
-                      <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                        Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
-                      </div>
-                      <div>
-                        <label>
-                          Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)
-                        </label>
-                        <input
-                          type="range"
-                          min={48}
-                          max={240}
-                          step={2}
-                          value={selected.size}
-                          onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })}
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {selected.type === 'logo' && (
-                    <>
-                      <div>
-                        <label>Datei</label>
-                        <input
-                          value={selected.filename}
-                          readOnly
-                          style={{ ...inputStyle, background: '#f9fafb' }}
-                        />
-                      </div>
-                      <div style={{ fontSize: 13, color: '#6b7280' }}>
-                        Das Bild wird automatisch für den Laser optimiert.
-                      </div>
-                    </>
-                  )}
                 </>
               ) : (
                 <div style={{ fontSize: 14, color: '#6b7280' }}>
@@ -1958,6 +2075,8 @@ export default function MetallkartenEditor() {
 
                 if (field.type === 'text' || field.type === 'multiline') {
                   const lines = String(field.text || '').split('\n');
+                  const fontFamily = FONT_OPTIONS[field.fontFamily] || FONT_OPTIONS[DEFAULT_FONT_FAMILY];
+
                   return (
                     <div
                       key={field.id}
@@ -1980,6 +2099,7 @@ export default function MetallkartenEditor() {
                         lineHeight: 1.35,
                         textAlign: field.align,
                         minWidth: 20,
+                        fontFamily,
                         textShadow:
                           previewMode === 'design'
                             ? '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)'
