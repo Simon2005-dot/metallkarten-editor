@@ -58,6 +58,10 @@ type ResizeState = {
   startHeight: number;
 } | null;
 
+type GuideLine =
+  | { type: 'vertical'; x: number }
+  | { type: 'horizontal'; y: number };
+
 const CARD_WIDTH = 85.6;
 const CARD_HEIGHT = 53.98;
 const PX_PER_MM = 7;
@@ -66,6 +70,7 @@ const STAGE_H = Math.round(CARD_HEIGHT * PX_PER_MM);
 const SAFE_MARGIN_MM = 3;
 const SAFE_MARGIN = SAFE_MARGIN_MM * PX_PER_MM;
 const DEFAULT_TEXT_COLOR = '#000000';
+const SNAP_THRESHOLD = 6;
 
 const CARD_BACKGROUNDS: Record<CardFinishKey, string> = {
   black: '/card-backgrounds/black.png',
@@ -355,6 +360,122 @@ function fieldBounds(field: Field) {
   return { width, height };
 }
 
+function getTextBaselines(field: TextField, y: number) {
+  const lines = String(field.text || '').split('\n');
+  return lines.map((_, index) => y + index * (field.fontSize * 1.35) + field.fontSize);
+}
+
+function getFieldSnapPoints(field: Field) {
+  const bounds = fieldBounds(field);
+  const xPoints = [field.x, field.x + bounds.width / 2, field.x + bounds.width];
+  const yPoints = [field.y, field.y + bounds.height / 2, field.y + bounds.height];
+
+  if (field.type === 'text' || field.type === 'multiline') {
+    yPoints.push(...getTextBaselines(field, field.y));
+  }
+
+  return { xPoints, yPoints };
+}
+
+function dedupeGuides(guides: GuideLine[]) {
+  const vertical = new Map<number, GuideLine>();
+  const horizontal = new Map<number, GuideLine>();
+
+  for (const guide of guides) {
+    if (guide.type === 'vertical') vertical.set(Math.round(guide.x), guide);
+    if (guide.type === 'horizontal') horizontal.set(Math.round(guide.y), guide);
+  }
+
+  return [...vertical.values(), ...horizontal.values()];
+}
+
+function snapPositionToOtherFields(
+  movingField: Field,
+  nextX: number,
+  nextY: number,
+  otherFields: Field[],
+  threshold = SNAP_THRESHOLD,
+) {
+  const bounds = fieldBounds(movingField);
+
+  const movingXPoints = [nextX, nextX + bounds.width / 2, nextX + bounds.width];
+  const movingYPoints = [nextY, nextY + bounds.height / 2, nextY + bounds.height];
+
+  if (movingField.type === 'text' || movingField.type === 'multiline') {
+    movingYPoints.push(...getTextBaselines(movingField, nextY));
+  }
+
+  let snappedX = nextX;
+  let snappedY = nextY;
+  let bestDx = threshold + 1;
+  let bestDy = threshold + 1;
+  const guides: GuideLine[] = [];
+
+  for (const other of otherFields) {
+    const { xPoints, yPoints } = getFieldSnapPoints(other);
+
+    for (const sourceX of movingXPoints) {
+      for (const targetX of xPoints) {
+        const diff = targetX - sourceX;
+        const absDiff = Math.abs(diff);
+        if (absDiff <= threshold && absDiff < bestDx) {
+          bestDx = absDiff;
+          snappedX = nextX + diff;
+        }
+      }
+    }
+
+    for (const sourceY of movingYPoints) {
+      for (const targetY of yPoints) {
+        const diff = targetY - sourceY;
+        const absDiff = Math.abs(diff);
+        if (absDiff <= threshold && absDiff < bestDy) {
+          bestDy = absDiff;
+          snappedY = nextY + diff;
+        }
+      }
+    }
+  }
+
+  if (bestDx <= threshold) {
+    const adjustedXPoints = [snappedX, snappedX + bounds.width / 2, snappedX + bounds.width];
+    for (const other of otherFields) {
+      const { xPoints } = getFieldSnapPoints(other);
+      for (const sourceX of adjustedXPoints) {
+        for (const targetX of xPoints) {
+          if (Math.abs(sourceX - targetX) <= 0.5) {
+            guides.push({ type: 'vertical', x: targetX });
+          }
+        }
+      }
+    }
+  }
+
+  if (bestDy <= threshold) {
+    const adjustedYPoints = [snappedY, snappedY + bounds.height / 2, snappedY + bounds.height];
+    if (movingField.type === 'text' || movingField.type === 'multiline') {
+      adjustedYPoints.push(...getTextBaselines(movingField, snappedY));
+    }
+
+    for (const other of otherFields) {
+      const { yPoints } = getFieldSnapPoints(other);
+      for (const sourceY of adjustedYPoints) {
+        for (const targetY of yPoints) {
+          if (Math.abs(sourceY - targetY) <= 0.5) {
+            guides.push({ type: 'horizontal', y: targetY });
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    x: snappedX,
+    y: snappedY,
+    guides: dedupeGuides(guides),
+  };
+}
+
 function duplicateField(field: Field): Field {
   const newId = `${field.id}-copy-${Date.now()}`;
   return {
@@ -491,11 +612,12 @@ export default function MetallkartenEditor() {
   const [selectedId, setSelectedId] = useState<string>('name');
   const [dragging, setDragging] = useState<DragState>(null);
   const [resizing, setResizing] = useState<ResizeState>(null);
+  const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
   const [cardName, setCardName] = useState<string>('metallkarte');
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [showSafeArea, setShowSafeArea] = useState<boolean>(true);
   const [snapToGrid, setSnapToGrid] = useState<boolean>(true);
-  const [showGrid, setShowGrid] = useState<boolean>(true);
+  const [showGrid, setShowGrid] = useState<boolean>(false);
   const [pasteMessage, setPasteMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false);
   const [previewMode, setPreviewMode] = useState<'design' | 'laser'>('design');
@@ -739,6 +861,12 @@ export default function MetallkartenEditor() {
     });
   };
 
+  const clearInteractionState = () => {
+    setDragging(null);
+    setResizing(null);
+    setGuideLines([]);
+  };
+
   const onMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     if (resizing) {
       const field = fields.find((f) => f.id === resizing.id);
@@ -756,6 +884,7 @@ export default function MetallkartenEditor() {
 
         nextWidth = clamp(nextWidth, 24, STAGE_W - field.x - SAFE_MARGIN);
         nextHeight = clamp(nextHeight, 24, STAGE_H - field.y - SAFE_MARGIN);
+        setGuideLines([]);
         updateField(field.id, { width: nextWidth, height: nextHeight });
         return;
       }
@@ -770,6 +899,7 @@ export default function MetallkartenEditor() {
 
         const maxSize = Math.min(STAGE_W - field.x - SAFE_MARGIN, STAGE_H - field.y - SAFE_MARGIN);
         nextSize = clamp(nextSize, 48, maxSize);
+        setGuideLines([]);
         updateField(field.id, { size: nextSize });
       }
       return;
@@ -781,6 +911,7 @@ export default function MetallkartenEditor() {
 
     const pos = pointerPos(event);
     const bounds = fieldBounds(field);
+
     let x = pos.x - dragging.offsetX;
     let y = pos.y - dragging.offsetY;
 
@@ -789,8 +920,16 @@ export default function MetallkartenEditor() {
       y = Math.round(y / 4) * 4;
     }
 
+    const otherFields = visibleFields.filter((f) => f.id !== field.id);
+    const snapped = snapPositionToOtherFields(field, x, y, otherFields, SNAP_THRESHOLD);
+
+    x = snapped.x;
+    y = snapped.y;
+
     x = clamp(x, SAFE_MARGIN, STAGE_W - SAFE_MARGIN - bounds.width);
     y = clamp(y, SAFE_MARGIN, STAGE_H - SAFE_MARGIN - bounds.height);
+
+    setGuideLines(snapped.guides);
     updateField(field.id, { x, y });
   };
 
@@ -1342,6 +1481,7 @@ export default function MetallkartenEditor() {
               onClick={() => {
                 setSide('front');
                 setSelectedId(frontFields[0]?.id || '');
+                setGuideLines([]);
               }}
               style={side === 'front' ? activeTabStyle : tabStyle}
             >
@@ -1351,6 +1491,7 @@ export default function MetallkartenEditor() {
               onClick={() => {
                 setSide('back');
                 setSelectedId(backFields[0]?.id || '');
+                setGuideLines([]);
               }}
               style={side === 'back' ? activeTabStyle : tabStyle}
             >
@@ -1370,14 +1511,8 @@ export default function MetallkartenEditor() {
             <div
               ref={stageRef}
               onMouseMove={onMouseMove}
-              onMouseUp={() => {
-                setDragging(null);
-                setResizing(null);
-              }}
-              onMouseLeave={() => {
-                setDragging(null);
-                setResizing(null);
-              }}
+              onMouseUp={clearInteractionState}
+              onMouseLeave={clearInteractionState}
               style={{
                 position: 'relative',
                 width: STAGE_W,
@@ -1409,6 +1544,40 @@ export default function MetallkartenEditor() {
                   }}
                 />
               ) : null}
+
+              {guideLines.map((line, index) =>
+                line.type === 'vertical' ? (
+                  <div
+                    key={`guide-v-${index}`}
+                    style={{
+                      pointerEvents: 'none',
+                      position: 'absolute',
+                      left: line.x,
+                      top: 0,
+                      width: 1,
+                      height: STAGE_H,
+                      background: '#22c55e',
+                      boxShadow: '0 0 0 1px rgba(34,197,94,0.18)',
+                      zIndex: 50,
+                    }}
+                  />
+                ) : (
+                  <div
+                    key={`guide-h-${index}`}
+                    style={{
+                      pointerEvents: 'none',
+                      position: 'absolute',
+                      left: 0,
+                      top: line.y,
+                      width: STAGE_W,
+                      height: 1,
+                      background: '#22c55e',
+                      boxShadow: '0 0 0 1px rgba(34,197,94,0.18)',
+                      zIndex: 50,
+                    }}
+                  />
+                ),
+              )}
 
               {visibleFields.map((field) => {
                 const isSelected = field.id === selectedId;
@@ -1601,6 +1770,9 @@ export default function MetallkartenEditor() {
                 ? 'Laser-Vorschau aktiv. Farben werden als gravurfreundliche Darstellung simuliert.'
                 : 'Design-Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.'}
             </span>
+            {isProcessingImage ? (
+              <span style={{ color: '#2563eb', fontWeight: 700 }}>Bild wird für Laser optimiert...</span>
+            ) : null}
           </div>
         </main>
       </div>
