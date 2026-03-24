@@ -735,7 +735,6 @@ export default function MetallkartenEditor() {
   );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [, setQrMatrices] = useState<Record<string, boolean[][]>>({});
-  const [editingCardNameId, setEditingCardNameId] = useState<string | null>(null);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const activeCard = cards.find((card) => card.id === activeCardId) || cards[0];
@@ -891,7 +890,6 @@ export default function MetallkartenEditor() {
     setSide('front');
     setGuideLines([]);
     setActiveSection('setup');
-    setEditingCardNameId(newCard.id);
   };
 
   const duplicateActiveCard = () => {
@@ -909,19 +907,6 @@ export default function MetallkartenEditor() {
     setSide('front');
     setGuideLines([]);
     setActiveSection('setup');
-    setEditingCardNameId(duplicated.id);
-  };
-
-  const removeActiveCard = () => {
-    if (cards.length <= 1) return;
-    const remaining = cards.filter((card) => card.id !== activeCardId);
-    const nextCard = remaining[0];
-    setCards(remaining);
-    setActiveCardId(nextCard.id);
-    setSelectedId(nextCard.frontFields[0]?.id || '');
-    setSide('front');
-    setGuideLines([]);
-    setEditingCardNameId(null);
   };
 
   const loadImageElement = (src: string) =>
@@ -1291,9 +1276,30 @@ export default function MetallkartenEditor() {
           strokeWidth="2"
           strokeDasharray="8 6"
         />
-        <rect x="10" y="10" width="18" height="18" fill={placeholderStroke} opacity="0.9" />
-        <rect x={field.size - 28} y="10" width="18" height="18" fill={placeholderStroke} opacity="0.9" />
-        <rect x="10" y={field.size - 28} width="18" height="18" fill={placeholderStroke} opacity="0.9" />
+        <rect
+          x="10"
+          y="10"
+          width="18"
+          height="18"
+          fill={placeholderStroke}
+          opacity="0.9"
+        />
+        <rect
+          x={field.size - 28}
+          y="10"
+          width="18"
+          height="18"
+          fill={placeholderStroke}
+          opacity="0.9"
+        />
+        <rect
+          x="10"
+          y={field.size - 28}
+          width="18"
+          height="18"
+          fill={placeholderStroke}
+          opacity="0.9"
+        />
         <text
           x="50%"
           y="54%"
@@ -1412,110 +1418,72 @@ export default function MetallkartenEditor() {
               </button>
             </div>
 
-            <button
-              onClick={removeActiveCard}
-              disabled={cards.length <= 1}
-              style={{
-                ...buttonStyle,
-                width: '100%',
-                opacity: cards.length <= 1 ? 0.5 : 1,
-              }}
-            >
-              Aktive Karte löschen
-            </button>
-
             <div style={{ display: 'grid', gap: 8, maxHeight: 360, overflow: 'auto' }}>
               {cards.map((card) => {
                 const isActive = activeCardId === card.id;
-                const isEditing = editingCardNameId === card.id;
 
                 return (
                   <div
                     key={card.id}
+                    onClick={() => {
+                      setActiveCardId(card.id);
+                      setSide('front');
+                      setSelectedId(card.frontFields[0]?.id || '');
+                      setGuideLines([]);
+                    }}
                     style={{
                       border: isActive ? '1px solid #111827' : '1px solid #e5e7eb',
                       background: isActive ? '#eef2ff' : '#fafafa',
                       borderRadius: 12,
                       padding: 10,
                       display: 'grid',
-                      gap: 8,
+                      gap: 10,
+                      cursor: 'pointer',
                     }}
                   >
-                    {isEditing ? (
-                      <input
-                        autoFocus
-                        value={card.name}
-                        onChange={(e) => updateCardById(card.id, { name: e.target.value })}
-                        onBlur={() => setEditingCardNameId(null)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === 'Escape') {
-                            setEditingCardNameId(null);
-                          }
-                        }}
-                        style={{
-                          ...inputStyle,
-                          marginTop: 0,
-                          fontWeight: 700,
-                        }}
-                      />
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setActiveCardId(card.id);
-                          setSide('front');
-                          setSelectedId(card.frontFields[0]?.id || '');
-                          setGuideLines([]);
-                        }}
-                        onDoubleClick={() => setEditingCardNameId(card.id)}
-                        style={{
-                          textAlign: 'left',
-                          border: 'none',
-                          background: 'transparent',
-                          padding: 0,
-                          cursor: 'pointer',
-                          fontWeight: 700,
-                          fontSize: 14,
-                          color: '#111827',
-                        }}
-                        title="Doppelklick zum Umbenennen"
-                      >
-                        {card.name}
-                      </button>
-                    )}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 130px',
+                        gap: 8,
+                        alignItems: 'end',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div>
+                        <label style={{ fontSize: 12, color: '#6b7280' }}>Kartenname</label>
+                        <input
+                          value={card.name}
+                          onChange={(e) => updateCardById(card.id, { name: e.target.value })}
+                          style={{
+                            ...inputStyle,
+                            marginTop: 6,
+                            fontWeight: 700,
+                          }}
+                        />
+                      </div>
 
-                    <div>
-                      <label style={{ fontSize: 12, color: '#6b7280' }}>Kartenfarbe</label>
-                      <select
-                        value={card.cardFinish}
-                        onChange={(e) =>
-                          updateCardById(card.id, {
-                            cardFinish: e.target.value as CardFinishKey,
-                          })
-                        }
-                        style={inputStyle}
-                      >
-                        <option value="black">Schwarz</option>
-                        <option value="silver">Silber</option>
-                        <option value="gold">Gold</option>
-                      </select>
+                      <div>
+                        <label style={{ fontSize: 12, color: '#6b7280' }}>Kartenfarbe</label>
+                        <select
+                          value={card.cardFinish}
+                          onChange={(e) =>
+                            updateCardById(card.id, {
+                              cardFinish: e.target.value as CardFinishKey,
+                            })
+                          }
+                          style={inputStyle}
+                        >
+                          <option value="black">Schwarz</option>
+                          <option value="silver">Silber</option>
+                          <option value="gold">Gold</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div style={{ fontSize: 12, color: '#6b7280' }}>
                       {card.frontFields.length + card.backFields.length} Elemente
                     </div>
-
-                    {!isEditing ? (
-                      <button
-                        onClick={() => setEditingCardNameId(card.id)}
-                        style={{
-                          ...buttonStyle,
-                          padding: '8px 10px',
-                          fontSize: 12,
-                        }}
-                      >
-                        Namen ändern
-                      </button>
-                    ) : null}
                   </div>
                 );
               })}
@@ -1523,56 +1491,48 @@ export default function MetallkartenEditor() {
           </Panel>
 
           {activeSection === 'setup' && (
-            <>
-              <Panel title="Kartenoptik" subtitle="Die Farbe wird direkt in der Kartenliste eingestellt">
-                <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
-                  Die Gravurfarben sind fest hinterlegt und können von Kunden nicht verändert werden.
-                </div>
-              </Panel>
-
-              <Panel title="Ansicht">
-                <label style={toggleRowStyle}>
-                  <span>Sicherheitsbereich</span>
-                  <input
-                    type="checkbox"
-                    checked={showSafeArea}
-                    onChange={(e) => setShowSafeArea(e.target.checked)}
-                  />
-                </label>
-                <label style={toggleRowStyle}>
-                  <span>Raster anzeigen</span>
-                  <input
-                    type="checkbox"
-                    checked={showGrid}
-                    onChange={(e) => setShowGrid(e.target.checked)}
-                  />
-                </label>
-                <label style={toggleRowStyle}>
-                  <span>Am Raster ausrichten</span>
-                  <input
-                    type="checkbox"
-                    checked={snapToGrid}
-                    onChange={(e) => setSnapToGrid(e.target.checked)}
-                  />
-                </label>
-                <label style={toggleRowStyle}>
-                  <span>QR Vorderseite</span>
-                  <input
-                    type="checkbox"
-                    checked={activeCard.showFrontQr}
-                    onChange={(e) => updateActiveCard({ showFrontQr: e.target.checked })}
-                  />
-                </label>
-                <label style={toggleRowStyle}>
-                  <span>QR Rückseite</span>
-                  <input
-                    type="checkbox"
-                    checked={activeCard.showBackQr}
-                    onChange={(e) => updateActiveCard({ showBackQr: e.target.checked })}
-                  />
-                </label>
-              </Panel>
-            </>
+            <Panel title="Ansicht">
+              <label style={toggleRowStyle}>
+                <span>Sicherheitsbereich</span>
+                <input
+                  type="checkbox"
+                  checked={showSafeArea}
+                  onChange={(e) => setShowSafeArea(e.target.checked)}
+                />
+              </label>
+              <label style={toggleRowStyle}>
+                <span>Raster anzeigen</span>
+                <input
+                  type="checkbox"
+                  checked={showGrid}
+                  onChange={(e) => setShowGrid(e.target.checked)}
+                />
+              </label>
+              <label style={toggleRowStyle}>
+                <span>Am Raster ausrichten</span>
+                <input
+                  type="checkbox"
+                  checked={snapToGrid}
+                  onChange={(e) => setSnapToGrid(e.target.checked)}
+                />
+              </label>
+              <label style={toggleRowStyle}>
+                <span>QR Vorderseite</span>
+                <input
+                  type="checkbox"
+                  checked={activeCard.showFrontQr}
+                  onChange={(e) => updateActiveCard({ showFrontQr: e.target.checked })}
+                />
+              </label>
+              <label style={toggleRowStyle}>
+                <span>QR Rückseite</span>
+                <input
+                  type="checkbox"
+                  checked={activeCard.showBackQr}
+                  onChange={(e) => updateActiveCard({ showBackQr: e.target.checked })}
+                />
+              </label>
+            </Panel>
           )}
 
           {activeSection === 'elements' && (
@@ -1905,7 +1865,7 @@ export default function MetallkartenEditor() {
               <h2 style={{ margin: 0, fontSize: 24 }}>Live Vorschau</h2>
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
                 {CARD_WIDTH} mm × {CARD_HEIGHT} mm · {side === 'front' ? 'Vorderseite' : 'Rückseite'} ·
-                {' '}Design-Modus · {activeCard.name}
+                Vorschau · {activeCard.name}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1939,7 +1899,7 @@ export default function MetallkartenEditor() {
                 setSelectedId(activeCard.frontFields[0]?.id || '');
                 setGuideLines([]);
               }}
-              style={activeTabStyle}
+              style={side === 'front' ? activeTabStyle : tabStyle}
             >
               Vorderseite bearbeiten
             </button>
@@ -2223,7 +2183,7 @@ export default function MetallkartenEditor() {
               color: '#6b7280',
             }}
           >
-            <span>Design-Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.</span>
+            <span>Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.</span>
             {isProcessingImage ? (
               <span style={{ color: '#2563eb', fontWeight: 700 }}>
                 Bild wird für Laser optimiert...
