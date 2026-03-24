@@ -730,12 +730,11 @@ export default function MetallkartenEditor() {
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [pasteMessage, setPasteMessage] = useState<string>('');
   const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false);
-  const [previewMode, setPreviewMode] = useState<'design' | 'laser'>('design');
   const [activeSection, setActiveSection] = useState<'setup' | 'elements' | 'selected' | 'export'>(
     'setup',
   );
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [qrMatrices, setQrMatrices] = useState<Record<string, boolean[][]>>({});
+  const [, setQrMatrices] = useState<Record<string, boolean[][]>>({});
   const [editingCardNameId, setEditingCardNameId] = useState<string | null>(null);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -1367,7 +1366,7 @@ export default function MetallkartenEditor() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              Kartennamen können direkt in der Kartenliste geändert werden.
+              Kartennamen und Kartenfarbe direkt in der Kartenliste bearbeiten.
             </div>
           </div>
 
@@ -1403,7 +1402,7 @@ export default function MetallkartenEditor() {
             </div>
           </Panel>
 
-          <Panel title="Karten" subtitle="Name direkt in der Liste anklicken und ändern">
+          <Panel title="Karten" subtitle="Name und Kartenfarbe direkt in der Liste bearbeiten">
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={addNewCard} style={{ ...buttonStyle, flex: 1 }}>
                 Neue Karte
@@ -1425,7 +1424,7 @@ export default function MetallkartenEditor() {
               Aktive Karte löschen
             </button>
 
-            <div style={{ display: 'grid', gap: 8, maxHeight: 300, overflow: 'auto' }}>
+            <div style={{ display: 'grid', gap: 8, maxHeight: 360, overflow: 'auto' }}>
               {cards.map((card) => {
                 const isActive = activeCardId === card.id;
                 const isEditing = editingCardNameId === card.id;
@@ -1439,7 +1438,7 @@ export default function MetallkartenEditor() {
                       borderRadius: 12,
                       padding: 10,
                       display: 'grid',
-                      gap: 6,
+                      gap: 8,
                     }}
                   >
                     {isEditing ? (
@@ -1449,10 +1448,7 @@ export default function MetallkartenEditor() {
                         onChange={(e) => updateCardById(card.id, { name: e.target.value })}
                         onBlur={() => setEditingCardNameId(null)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            setEditingCardNameId(null);
-                          }
-                          if (e.key === 'Escape') {
+                          if (e.key === 'Enter' || e.key === 'Escape') {
                             setEditingCardNameId(null);
                           }
                         }}
@@ -1487,8 +1483,25 @@ export default function MetallkartenEditor() {
                       </button>
                     )}
 
+                    <div>
+                      <label style={{ fontSize: 12, color: '#6b7280' }}>Kartenfarbe</label>
+                      <select
+                        value={card.cardFinish}
+                        onChange={(e) =>
+                          updateCardById(card.id, {
+                            cardFinish: e.target.value as CardFinishKey,
+                          })
+                        }
+                        style={inputStyle}
+                      >
+                        <option value="black">Schwarz</option>
+                        <option value="silver">Silber</option>
+                        <option value="gold">Gold</option>
+                      </select>
+                    </div>
+
                     <div style={{ fontSize: 12, color: '#6b7280' }}>
-                      {CARD_LABELS[card.cardFinish]} · {card.frontFields.length + card.backFields.length} Elemente
+                      {card.frontFields.length + card.backFields.length} Elemente
                     </div>
 
                     {!isEditing ? (
@@ -1511,54 +1524,9 @@ export default function MetallkartenEditor() {
 
           {activeSection === 'setup' && (
             <>
-              <Panel title="Aktive Karte">
-                <div>
-                  <label>Kartenname</label>
-                  <input
-                    value={activeCard.name}
-                    onChange={(e) => updateActiveCard({ name: e.target.value })}
-                    style={inputStyle}
-                  />
-                </div>
-              </Panel>
-
-              <Panel title="Kartenoptik" subtitle="Hier stellst du die Vorschau passend zur echten Metallkarte ein">
-                <div>
-                  <label>Kartenfarbe</label>
-                  <select
-                    value={activeCard.cardFinish}
-                    onChange={(e) => updateActiveCard({ cardFinish: e.target.value as CardFinishKey })}
-                    style={inputStyle}
-                  >
-                    <option value="black">Schwarz</option>
-                    <option value="silver">Silber</option>
-                    <option value="gold">Gold</option>
-                  </select>
-                </div>
-
+              <Panel title="Kartenoptik" subtitle="Die Farbe wird direkt in der Kartenliste eingestellt">
                 <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
                   Die Gravurfarben sind fest hinterlegt und können von Kunden nicht verändert werden.
-                </div>
-              </Panel>
-
-              <Panel title="Vorschau">
-                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                  Das Raster ist standardmäßig ausgeschaltet. Beim Verschieben rasten Elemente an gleichen
-                  Höhen, Kanten und Textlinien ein.
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button
-                    onClick={() => setPreviewMode('design')}
-                    style={previewMode === 'design' ? activeTabStyle : tabStyle}
-                  >
-                    Design
-                  </button>
-                  <button
-                    onClick={() => setPreviewMode('laser')}
-                    style={previewMode === 'laser' ? activeTabStyle : tabStyle}
-                  >
-                    Laser
-                  </button>
                 </div>
               </Panel>
 
@@ -1679,172 +1647,170 @@ export default function MetallkartenEditor() {
           {activeSection === 'selected' && (
             <Panel title={selected ? `Ausgewählt: ${selected.label}` : 'Kein Element ausgewählt'}>
               {selected ? (
-                <>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div>
-                        <label>X Position (mm)</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={pxToMm(selected.x).toFixed(1)}
-                          onChange={(e) => updateField(selected.id, { x: mmToPx(Number(e.target.value)) })}
-                          style={inputStyle}
-                        />
-                      </div>
-                      <div>
-                        <label>Y Position (mm)</label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={pxToMm(selected.y).toFixed(1)}
-                          onChange={(e) => updateField(selected.id, { y: mmToPx(Number(e.target.value)) })}
-                          style={inputStyle}
-                        />
-                      </div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label>X Position (mm)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={pxToMm(selected.x).toFixed(1)}
+                        onChange={(e) => updateField(selected.id, { x: mmToPx(Number(e.target.value)) })}
+                        style={inputStyle}
+                      />
                     </div>
-
-                    {(selected.type === 'text' || selected.type === 'multiline') && (
-                      <>
-                        <div>
-                          <label>Text</label>
-                          {selected.type === 'multiline' ? (
-                            <textarea
-                              value={selected.text}
-                              onChange={(e) => updateField(selected.id, { text: e.target.value })}
-                              rows={4}
-                              style={inputStyle}
-                            />
-                          ) : (
-                            <input
-                              value={selected.text}
-                              onChange={(e) => updateField(selected.id, { text: e.target.value })}
-                              style={inputStyle}
-                            />
-                          )}
-                        </div>
-
-                        <div>
-                          <label>Schriftart</label>
-                          <select
-                            value={selected.fontFamily}
-                            onChange={(e) =>
-                              updateField(selected.id, {
-                                fontFamily: e.target.value as FontFamilyKey,
-                              })
-                            }
-                            style={inputStyle}
-                          >
-                            {Object.entries(FONT_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label>Ausrichtung</label>
-                          <select
-                            value={selected.align}
-                            onChange={(e) =>
-                              updateField(selected.id, {
-                                align: e.target.value as 'left' | 'center' | 'right',
-                              })
-                            }
-                            style={inputStyle}
-                          >
-                            <option value="left">Links</option>
-                            <option value="center">Zentriert</option>
-                            <option value="right">Rechts</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label>Schriftgröße: {selected.fontSize}px</label>
-                          <input
-                            type="range"
-                            min={8}
-                            max={36}
-                            step={1}
-                            value={selected.fontSize}
-                            onChange={(e) =>
-                              updateField(selected.id, { fontSize: Number(e.target.value) })
-                            }
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-
-                        <div>
-                          <label>Stärke: {selected.fontWeight}</label>
-                          <input
-                            type="range"
-                            min={300}
-                            max={800}
-                            step={100}
-                            value={selected.fontWeight}
-                            onChange={(e) =>
-                              updateField(selected.id, { fontWeight: Number(e.target.value) })
-                            }
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {selected.type === 'qr' && (
-                      <>
-                        <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                          Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
-                        </div>
-                        <div>
-                          <label>
-                            Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)
-                          </label>
-                          <input
-                            type="range"
-                            min={48}
-                            max={240}
-                            step={2}
-                            value={selected.size}
-                            onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {selected.type === 'logo' && (
-                      <>
-                        <div>
-                          <label>Datei</label>
-                          <input
-                            value={selected.filename}
-                            readOnly
-                            style={{ ...inputStyle, background: '#f9fafb' }}
-                          />
-                        </div>
-                        <div style={{ fontSize: 13, color: '#6b7280' }}>
-                          Das Bild wird automatisch für den Laser optimiert.
-                        </div>
-                      </>
-                    )}
-
-                    {!protectedIds.includes(selected.id) ? (
-                      <button
-                        onClick={() => removeField(selected.id)}
-                        style={{
-                          ...buttonStyle,
-                          background: '#dc2626',
-                          color: '#fff',
-                          borderColor: '#dc2626',
-                        }}
-                      >
-                        Element löschen
-                      </button>
-                    ) : null}
+                    <div>
+                      <label>Y Position (mm)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={pxToMm(selected.y).toFixed(1)}
+                        onChange={(e) => updateField(selected.id, { y: mmToPx(Number(e.target.value)) })}
+                        style={inputStyle}
+                      />
+                    </div>
                   </div>
-                </>
+
+                  {(selected.type === 'text' || selected.type === 'multiline') && (
+                    <>
+                      <div>
+                        <label>Text</label>
+                        {selected.type === 'multiline' ? (
+                          <textarea
+                            value={selected.text}
+                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                            rows={4}
+                            style={inputStyle}
+                          />
+                        ) : (
+                          <input
+                            value={selected.text}
+                            onChange={(e) => updateField(selected.id, { text: e.target.value })}
+                            style={inputStyle}
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label>Schriftart</label>
+                        <select
+                          value={selected.fontFamily}
+                          onChange={(e) =>
+                            updateField(selected.id, {
+                              fontFamily: e.target.value as FontFamilyKey,
+                            })
+                          }
+                          style={inputStyle}
+                        >
+                          {Object.entries(FONT_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label>Ausrichtung</label>
+                        <select
+                          value={selected.align}
+                          onChange={(e) =>
+                            updateField(selected.id, {
+                              align: e.target.value as 'left' | 'center' | 'right',
+                            })
+                          }
+                          style={inputStyle}
+                        >
+                          <option value="left">Links</option>
+                          <option value="center">Zentriert</option>
+                          <option value="right">Rechts</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label>Schriftgröße: {selected.fontSize}px</label>
+                        <input
+                          type="range"
+                          min={8}
+                          max={36}
+                          step={1}
+                          value={selected.fontSize}
+                          onChange={(e) =>
+                            updateField(selected.id, { fontSize: Number(e.target.value) })
+                          }
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label>Stärke: {selected.fontWeight}</label>
+                        <input
+                          type="range"
+                          min={300}
+                          max={800}
+                          step={100}
+                          value={selected.fontWeight}
+                          onChange={(e) =>
+                            updateField(selected.id, { fontWeight: Number(e.target.value) })
+                          }
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selected.type === 'qr' && (
+                    <>
+                      <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+                        Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
+                      </div>
+                      <div>
+                        <label>
+                          Größe: {selected.size}px ({pxToMm(selected.size).toFixed(1)} mm)
+                        </label>
+                        <input
+                          type="range"
+                          min={48}
+                          max={240}
+                          step={2}
+                          value={selected.size}
+                          onChange={(e) => updateField(selected.id, { size: Number(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selected.type === 'logo' && (
+                    <>
+                      <div>
+                        <label>Datei</label>
+                        <input
+                          value={selected.filename}
+                          readOnly
+                          style={{ ...inputStyle, background: '#f9fafb' }}
+                        />
+                      </div>
+                      <div style={{ fontSize: 13, color: '#6b7280' }}>
+                        Das Bild wird automatisch für den Laser optimiert.
+                      </div>
+                    </>
+                  )}
+
+                  {!protectedIds.includes(selected.id) ? (
+                    <button
+                      onClick={() => removeField(selected.id)}
+                      style={{
+                        ...buttonStyle,
+                        background: '#dc2626',
+                        color: '#fff',
+                        borderColor: '#dc2626',
+                      }}
+                    >
+                      Element löschen
+                    </button>
+                  ) : null}
+                </div>
               ) : (
                 <div style={{ fontSize: 14, color: '#6b7280' }}>
                   Klicke links in der Elementliste oder direkt in der Vorschau auf ein Element.
@@ -1938,8 +1904,8 @@ export default function MetallkartenEditor() {
             <div>
               <h2 style={{ margin: 0, fontSize: 24 }}>Live Vorschau</h2>
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-                {CARD_WIDTH} mm × {CARD_HEIGHT} mm · {side === 'front' ? 'Vorderseite' : 'Rückseite'} ·{' '}
-                {previewMode === 'laser' ? 'Laser-Modus' : 'Design-Modus'} · {activeCard.name}
+                {CARD_WIDTH} mm × {CARD_HEIGHT} mm · {side === 'front' ? 'Vorderseite' : 'Rückseite'} ·
+                {' '}Design-Modus · {activeCard.name}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1973,7 +1939,7 @@ export default function MetallkartenEditor() {
                 setSelectedId(activeCard.frontFields[0]?.id || '');
                 setGuideLines([]);
               }}
-              style={side === 'front' ? activeTabStyle : tabStyle}
+              style={activeTabStyle}
             >
               Vorderseite bearbeiten
             </button>
@@ -2017,7 +1983,7 @@ export default function MetallkartenEditor() {
                 backgroundSize: showGrid ? '20px 20px, 20px 20px, cover' : 'cover',
                 backgroundPosition: showGrid ? '0 0, 0 0, center' : 'center',
                 backgroundRepeat: 'repeat, repeat, no-repeat',
-                filter: previewMode === 'laser' ? 'grayscale(0.2) contrast(1.1)' : 'none',
+                filter: 'none',
                 boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
               }}
             >
@@ -2100,10 +2066,7 @@ export default function MetallkartenEditor() {
                         textAlign: field.align,
                         minWidth: 20,
                         fontFamily,
-                        textShadow:
-                          previewMode === 'design'
-                            ? '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)'
-                            : 'none',
+                        textShadow: '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
                       }}
                     >
                       {lines.map((line, index) => (
@@ -2257,14 +2220,10 @@ export default function MetallkartenEditor() {
               alignItems: 'center',
               flexWrap: 'wrap',
               fontSize: 13,
-              color: previewMode === 'laser' ? '#7c3aed' : '#6b7280',
+              color: '#6b7280',
             }}
           >
-            <span>
-              {previewMode === 'laser'
-                ? 'Laser-Vorschau aktiv. Farben werden als gravurfreundliche Darstellung simuliert.'
-                : 'Design-Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.'}
-            </span>
+            <span>Design-Vorschau aktiv. Die Karte nutzt dein echtes Hintergrundbild.</span>
             {isProcessingImage ? (
               <span style={{ color: '#2563eb', fontWeight: 700 }}>
                 Bild wird für Laser optimiert...
