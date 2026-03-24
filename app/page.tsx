@@ -331,8 +331,8 @@ function createNewCardDesign(index = 1): CardDesign {
     id: buildUniqueId('card'),
     name: `Karte ${index}`,
     cardFinish: 'black',
-    showFrontQr: true,
-    showBackQr: true,
+    showFrontQr: false,
+    showBackQr: false,
     frontFields: cloneFields(frontDefaultFields),
     backFields: cloneFields(backDefaultFields),
   };
