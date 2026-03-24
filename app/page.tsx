@@ -685,6 +685,64 @@ function loadImageElement(src: string) {
   });
 }
 
+async function upscaleImageSource(
+  src: string,
+  options?: {
+    minWidth?: number;
+    minHeight?: number;
+    maxScale?: number;
+  },
+) {
+  const img = await loadImageElement(src);
+
+  const originalWidth = img.naturalWidth || img.width;
+  const originalHeight = img.naturalHeight || img.height;
+
+  const minWidth = options?.minWidth ?? 1600;
+  const minHeight = options?.minHeight ?? 900;
+  const maxScale = options?.maxScale ?? 4;
+
+  const scaleX = minWidth / originalWidth;
+  const scaleY = minHeight / originalHeight;
+  const scale = Math.max(1, Math.min(maxScale, Math.max(scaleX, scaleY)));
+
+  if (scale <= 1.01) {
+    return {
+      src,
+      width: originalWidth,
+      height: originalHeight,
+      scaled: false,
+    };
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(originalWidth * scale);
+  canvas.height = Math.round(originalHeight * scale);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return {
+      src,
+      width: originalWidth,
+      height: originalHeight,
+      scaled: false,
+    };
+  }
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  const upscaledSrc = canvas.toDataURL('image/png');
+
+  return {
+    src: upscaledSrc,
+    width: canvas.width,
+    height: canvas.height,
+    scaled: true,
+  };
+}
+
 function createBooleanMask(width: number, height: number, fill = false) {
   return Array.from({ length: height }, () => Array.from({ length: width }, () => fill));
 }
@@ -835,6 +893,19 @@ function cropMask(mask: boolean[][], padding = 2) {
     width: maxX - minX + 1,
     height: maxY - minY + 1,
   };
+}
+
+function boostContrast(imageData: ImageData, contrast = 40) {
+  const data = imageData.data;
+  const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = clamp(Math.round(factor * (data[i] - 128) + 128), 0, 255);
+    data[i + 1] = clamp(Math.round(factor * (data[i + 1] - 128) + 128), 0, 255);
+    data[i + 2] = clamp(Math.round(factor * (data[i + 2] - 128) + 128), 0, 255);
+  }
+
+  return imageData;
 }
 
 function maskFromImageData(
@@ -1029,9 +1100,19 @@ async function traceImageToVectorAsset(
   options?: {
     whiteThreshold?: number;
     laserThreshold?: number;
+    upscaleMinWidth?: number;
+    upscaleMinHeight?: number;
+    upscaleMaxScale?: number;
+    contrast?: number;
   },
 ): Promise<VectorTraceResult> {
-  const img = await loadImageElement(src);
+  const upscaled = await upscaleImageSource(src, {
+    minWidth: options?.upscaleMinWidth ?? 1600,
+    minHeight: options?.upscaleMinHeight ?? 900,
+    maxScale: options?.upscaleMaxScale ?? 4,
+  });
+
+  const img = await loadImageElement(upscaled.src);
   const canvas = document.createElement('canvas');
   canvas.width = img.naturalWidth || img.width;
   canvas.height = img.naturalHeight || img.height;
@@ -1041,11 +1122,15 @@ async function traceImageToVectorAsset(
     throw new Error('Canvas-Kontext konnte nicht erstellt werden.');
   }
 
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0);
+
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const boosted = boostContrast(imageData, options?.contrast ?? 40);
 
   const mask = maskFromImageData(
-    imageData,
+    boosted,
     options?.whiteThreshold ?? 235,
     options?.laserThreshold ?? 165,
   );
@@ -1349,6 +1434,10 @@ export default function MetallkartenEditor() {
         const traced = await traceImageToVectorAsset(src, {
           whiteThreshold: 235,
           laserThreshold: 165,
+          upscaleMinWidth: 1600,
+          upscaleMinHeight: 900,
+          upscaleMaxScale: 4,
+          contrast: 40,
         });
 
         setCards((current) =>
@@ -1573,7 +1662,7 @@ export default function MetallkartenEditor() {
         const reader = new FileReader();
         reader.onload = async () => {
           await addLogoFromSource(String(reader.result), `screenshot-${Date.now()}.png`);
-          setPasteMessage('Screenshot wurde eingefügt und direkt vektorisiert.');
+          setPasteMessage('Screenshot wurde eingefügt, hochskaliert und direkt vektorisiert.');
           window.setTimeout(() => setPasteMessage(''), 3000);
         };
         reader.readAsDataURL(file);
@@ -1755,7 +1844,7 @@ export default function MetallkartenEditor() {
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor Pro</div>
             <div style={{ fontSize: 13, opacity: 0.9 }}>
-              Screenshots und Logos werden beim Einfügen direkt vektorisiert.
+              Screenshots und Logos werden beim Einfügen automatisch hochskaliert und vektorisiert.
             </div>
           </div>
 
@@ -2124,7 +2213,7 @@ export default function MetallkartenEditor() {
                       />
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
-                      Das Bild wird direkt im Editor getract und als Pfad exportiert.
+                      Das Bild wird automatisch hochskaliert, kontrastverstärkt und als Pfad exportiert.
                     </div>
                   </>
                 )}
@@ -2641,7 +2730,7 @@ export default function MetallkartenEditor() {
             <span>Vorschau aktiv. Doppelklick auf Text zum direkten Bearbeiten.</span>
             {isProcessingImage ? (
               <span style={{ color: '#2563eb', fontWeight: 700 }}>
-                Bild wird direkt in Vektor-Konturen umgewandelt...
+                Bild wird hochskaliert und in Vektor-Konturen umgewandelt...
               </span>
             ) : null}
           </div>
