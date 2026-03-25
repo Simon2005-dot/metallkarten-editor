@@ -2059,7 +2059,6 @@ export default function MetallkartenEditor() {
 
           <Panel title="Bestellung" subtitle="Pflichtangabe für die Zuordnung deiner Dateien">
             <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-              Alle Karten dieser Bestellung werden gemeinsam in einer ZIP-Datei exportiert.
             </div>
             <div>
               <label>Bestellnummer</label>
