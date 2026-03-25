@@ -2319,43 +2319,66 @@ export default function MetallkartenEditor() {
           onClick={(e) => e.stopPropagation()}
         >
           <div
-            style={{
-              background: canExport ? '#f9fafb' : '#fef2f2',
-              border: canExport ? '1px solid #e5e7eb' : '2px solid #ef4444',
-              borderRadius: 16,
-              padding: 16,
-              display: 'grid',
-              gap: 10,
-            }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Bestellnummer {canExport ? '' : 'fehlt'}</div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(220px, 380px) 1fr',
-                gap: 12,
-                alignItems: 'center',
-              }}
-            >
-              <input
-                value={orderNumber}
-                onChange={(e) => setOrderNumber(e.target.value)}
-                placeholder="Bestellnummer oder Firmenname eingeben"
-                style={{
-                  ...inputStyle,
-                  marginTop: 0,
-                  border: canExport ? '1px solid #d1d5db' : '2px solid #ef4444',
-                  background: canExport ? '#ffffff' : '#fff7f7',
-                  fontWeight: 700,
-                }}
-              />
-              <div style={{ fontSize: 13, color: canExport ? '#047857' : '#b91c1c' }}>
-                {canExport
-                  ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten.zip`
-                  : 'Bitte zuerst die Bestellnummer oder Firmenname eingeben'}
-              </div>
-            </div>
-          </div>
+  style={{
+    background: canExport ? '#f9fafb' : '#fef2f2',
+    border: canExport ? '1px solid #e5e7eb' : '2px solid #ef4444',
+    borderRadius: 16,
+    padding: 16,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  }}
+>
+  {/* TOP BAR */}
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ fontWeight: 700, fontSize: 16 }}>
+      Bestellnummer {canExport ? '' : 'fehlt'}
+    </div>
+
+    <button
+      onClick={exportAllCards}
+      style={{
+        ...buttonStyle,
+        background: '#111827',
+        color: '#fff',
+        borderColor: '#111827',
+        opacity: canExport && !isSubmitting ? 1 : 0.5,
+        whiteSpace: 'nowrap',
+      }}
+      disabled={!canExport || isSubmitting}
+    >
+      {isSubmitting ? 'ZIP wird erstellt...' : 'Exportieren'}
+    </button>
+  </div>
+
+  {/* INPUT */}
+  <div
+    style={{
+      display: 'grid',
+      gridTemplateColumns: 'minmax(220px, 380px) 1fr',
+      gap: 12,
+      alignItems: 'center',
+    }}
+  >
+    <input
+      value={orderNumber}
+      onChange={(e) => setOrderNumber(e.target.value)}
+      placeholder="Bestellnummer oder Firmenname eingeben"
+      style={{
+        ...inputStyle,
+        marginTop: 0,
+        border: canExport ? '1px solid #d1d5db' : '2px solid #ef4444',
+        background: canExport ? '#ffffff' : '#fff7f7',
+        fontWeight: 700,
+      }}
+    />
+    <div style={{ fontSize: 13, color: canExport ? '#047857' : '#b91c1c' }}>
+      {canExport
+        ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten.zip`
+        : 'Bitte zuerst die Bestellnummer oder Firmenname eingeben'}
+    </div>
+  </div>
+</div>
 
           <div
             style={{
@@ -2381,10 +2404,6 @@ export default function MetallkartenEditor() {
               <div style={statStyle}>
                 <strong>{visibleFields.length}</strong>
                 <span>Elemente</span>
-              </div>
-              <div style={statStyle}>
-                <strong>{SAFE_MARGIN_MM} mm</strong>
-                <span>Sicherheitsrand</span>
               </div>
               <div style={statStyle}>
                 <strong>{CARD_LABELS[activeCard.cardFinish]}</strong>
