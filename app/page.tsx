@@ -1258,6 +1258,114 @@ function SelectionBadge({ width, height }: { width: number; height: number }) {
     </div>
   );
 }
+function DistanceGuides({ field }: { field: Field }) {
+  const bounds = fieldBounds(field);
+
+  const left = field.x;
+  const top = field.y;
+  const right = STAGE_W - (field.x + bounds.width);
+  const bottom = STAGE_H - (field.y + bounds.height);
+
+  const labelStyle: React.CSSProperties = {
+    position: 'absolute',
+    fontSize: 11,
+    background: 'rgba(17,24,39,0.88)',
+    color: '#fff',
+    padding: '2px 6px',
+    borderRadius: 999,
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap',
+    zIndex: 80,
+  };
+
+  const lineStyle: React.CSSProperties = {
+    position: 'absolute',
+    pointerEvents: 'none',
+    background: '#f59e0b',
+    opacity: 0.9,
+    zIndex: 70,
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          ...lineStyle,
+          left: 0,
+          top: field.y + bounds.height / 2,
+          width: field.x,
+          height: 1,
+        }}
+      />
+      <div
+        style={{
+          ...labelStyle,
+          left: Math.max(4, field.x / 2 - 20),
+          top: field.y + bounds.height / 2 - 20,
+        }}
+      >
+        {pxToMm(left).toFixed(1)} mm
+      </div>
+
+      <div
+        style={{
+          ...lineStyle,
+          left: field.x + bounds.width,
+          top: field.y + bounds.height / 2,
+          width: right,
+          height: 1,
+        }}
+      />
+      <div
+        style={{
+          ...labelStyle,
+          left: field.x + bounds.width + Math.max(4, right / 2 - 20),
+          top: field.y + bounds.height / 2 - 20,
+        }}
+      >
+        {pxToMm(right).toFixed(1)} mm
+      </div>
+
+      <div
+        style={{
+          ...lineStyle,
+          left: field.x + bounds.width / 2,
+          top: 0,
+          width: 1,
+          height: field.y,
+        }}
+      />
+      <div
+        style={{
+          ...labelStyle,
+          left: field.x + bounds.width / 2 + 8,
+          top: Math.max(4, field.y / 2 - 10),
+        }}
+      >
+        {pxToMm(top).toFixed(1)} mm
+      </div>
+
+      <div
+        style={{
+          ...lineStyle,
+          left: field.x + bounds.width / 2,
+          top: field.y + bounds.height,
+          width: 1,
+          height: bottom,
+        }}
+      />
+      <div
+        style={{
+          ...labelStyle,
+          left: field.x + bounds.width / 2 + 8,
+          top: field.y + bounds.height + Math.max(4, bottom / 2 - 10),
+        }}
+      >
+        {pxToMm(bottom).toFixed(1)} mm
+      </div>
+    </>
+  );
+}
 
 function createNfcField(): LogoField {
   return {
@@ -2059,6 +2167,7 @@ export default function MetallkartenEditor() {
 
           <Panel title="Bestellung" subtitle="Pflichtangabe für die Zuordnung deiner Dateien">
             <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+
             </div>
             <div>
               <label>Bestellnummer</label>
@@ -2652,8 +2761,11 @@ export default function MetallkartenEditor() {
                           </div>
                         )}
                         {isSelected && !isEditing ? (
+                         <>
                           <SelectionBadge width={bounds.width} height={bounds.height} />
-                        ) : null}
+                         <DistanceGuides field={field} />
+                        </>
+                          ) : null}
                       </div>
                     );
                   }
