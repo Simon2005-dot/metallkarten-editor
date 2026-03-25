@@ -1224,7 +1224,7 @@ function Panel({
         border: '1px solid #e5e7eb',
         borderRadius: 14,
         padding: 14,
-        background: '#ff2020',
+        background: '#ffffff',
         display: 'grid',
         gap: 12,
       }}
@@ -1232,7 +1232,7 @@ function Panel({
       <div>
         <div style={{ fontWeight: 700, fontSize: 15 }}>{title}</div>
         {subtitle ? (
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{subtitle}</div>
+          <div style={{ fontSize: 12, color: '#1d1f22', marginTop: 2 }}>{subtitle}</div>
         ) : null}
       </div>
       {children}
