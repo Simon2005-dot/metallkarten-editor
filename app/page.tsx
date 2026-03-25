@@ -1270,6 +1270,11 @@ export default function MetallkartenEditor() {
   const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [, setQrMatrices] = useState<Record<string, boolean[][]>>({});
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    fieldId: string;
+  } | null>(null);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const activeCard = cards.find((card) => card.id === activeCardId) || cards[0];
@@ -1290,7 +1295,6 @@ export default function MetallkartenEditor() {
   const previewTextColor = getLaserColor(activeCard.cardFinish, side);
   const currentBackground = CARD_BACKGROUNDS[activeCard.cardFinish];
   const frameStyle = CARD_FRAME_STYLES[activeCard.cardFinish];
-  const protectedIds = fields.slice(0, 5).map((f) => f.id);
 
   const updateCardById = (cardId: string, patch: Partial<CardDesign>) => {
     setCards((current) => current.map((card) => (card.id === cardId ? { ...card, ...patch } : card)));
@@ -1533,6 +1537,7 @@ export default function MetallkartenEditor() {
     setSide('front');
     setGuideLines([]);
     setEditingTextId(null);
+    setContextMenu(null);
   };
 
   const duplicateActiveCard = () => {
@@ -1550,6 +1555,7 @@ export default function MetallkartenEditor() {
     setSide('front');
     setGuideLines([]);
     setEditingTextId(null);
+    setContextMenu(null);
   };
 
   const addLogoFromSource = async (src: string, filename: string) => {
@@ -1579,6 +1585,7 @@ export default function MetallkartenEditor() {
     setFields((current) => [...current, baseLogo]);
     setSelectedId(id);
     setEditingTextId(null);
+    setContextMenu(null);
 
     setTimeout(async () => {
       try {
@@ -1652,12 +1659,14 @@ export default function MetallkartenEditor() {
     setFields((current) => [...current, copy]);
     setSelectedId(copy.id);
     setEditingTextId(null);
+    setContextMenu(null);
   };
 
   const removeField = (id: string) => {
     setFields((current) => current.filter((f) => f.id !== id));
     setSelectedId((current) => (current === id ? fields[0]?.id || '' : current));
     setEditingTextId((current) => (current === id ? null : current));
+    setContextMenu(null);
   };
 
   const onLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1681,6 +1690,7 @@ export default function MetallkartenEditor() {
     const pos = pointerPos(event);
     setSelectedId(field.id);
     setEditingTextId(null);
+    setContextMenu(null);
     setDragging({
       id: field.id,
       offsetX: pos.x - field.x,
@@ -1777,11 +1787,14 @@ export default function MetallkartenEditor() {
 
       if (event.key === 'Escape') {
         setEditingTextId(null);
+        setContextMenu(null);
       }
 
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (!protectedIds.includes(selected.id)) removeField(selected.id);
+        event.preventDefault();
+        removeField(selected.id);
       }
+
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
         nudgeSelected(event.shiftKey ? -10 : -1, 0);
@@ -1798,6 +1811,7 @@ export default function MetallkartenEditor() {
         event.preventDefault();
         nudgeSelected(0, event.shiftKey ? 10 : 1);
       }
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
         event.preventDefault();
         duplicateSelected();
@@ -1830,7 +1844,7 @@ export default function MetallkartenEditor() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('paste', onPaste);
     };
-  }, [selected, fields, protectedIds]);
+  }, [selected, fields]);
 
   const exportAllCards = async () => {
     if (!canExport || isSubmitting) {
@@ -1960,6 +1974,7 @@ export default function MetallkartenEditor() {
         fontFamily: 'Arial, sans-serif',
         color: '#111827',
       }}
+      onClick={() => setContextMenu(null)}
     >
       <div
         style={{
@@ -1997,8 +2012,7 @@ export default function MetallkartenEditor() {
           >
             <div style={{ fontSize: 12, opacity: 0.8 }}>Karten-Designer</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>Metallkarten Editor</div>
-            <div style={{ fontSize: 13, opacity: 0.9 }}>
-            </div>
+            <div style={{ fontSize: 13, opacity: 0.9 }} />
           </div>
 
           <div
@@ -2053,6 +2067,7 @@ export default function MetallkartenEditor() {
                       setSelectedId(card.frontFields[0]?.id || '');
                       setGuideLines([]);
                       setEditingTextId(null);
+                      setContextMenu(null);
                     }}
                     style={{
                       border: isActive ? '1px solid #111827' : '1px solid #e5e7eb',
@@ -2202,6 +2217,7 @@ export default function MetallkartenEditor() {
                   onClick={() => {
                     setSelectedId(field.id);
                     setEditingTextId(null);
+                    setContextMenu(null);
                   }}
                   style={{
                     textAlign: 'left',
@@ -2395,19 +2411,17 @@ export default function MetallkartenEditor() {
                   </>
                 )}
 
-                {!protectedIds.includes(selected.id) ? (
-                  <button
-                    onClick={() => removeField(selected.id)}
-                    style={{
-                      ...buttonStyle,
-                      background: '#dc2626',
-                      color: '#fff',
-                      borderColor: '#dc2626',
-                    }}
-                  >
-                    Element löschen
-                  </button>
-                ) : null}
+                <button
+                  onClick={() => removeField(selected.id)}
+                  style={{
+                    ...buttonStyle,
+                    background: '#dc2626',
+                    color: '#fff',
+                    borderColor: '#dc2626',
+                  }}
+                >
+                  Element löschen
+                </button>
               </div>
             ) : (
               <div style={{ fontSize: 14, color: '#6b7280' }}>
@@ -2534,6 +2548,7 @@ export default function MetallkartenEditor() {
                 setSelectedId(activeCard.frontFields[0]?.id || '');
                 setGuideLines([]);
                 setEditingTextId(null);
+                setContextMenu(null);
               }}
               style={side === 'front' ? activeTabStyle : tabStyle}
             >
@@ -2545,6 +2560,7 @@ export default function MetallkartenEditor() {
                 setSelectedId(activeCard.backFields[0]?.id || '');
                 setGuideLines([]);
                 setEditingTextId(null);
+                setContextMenu(null);
               }}
               style={side === 'back' ? activeTabStyle : tabStyle}
             >
@@ -2566,7 +2582,10 @@ export default function MetallkartenEditor() {
               onMouseMove={onMouseMove}
               onMouseUp={clearInteractionState}
               onMouseLeave={clearInteractionState}
-              onClick={() => setEditingTextId(null)}
+              onClick={() => {
+                setEditingTextId(null);
+                setContextMenu(null);
+              }}
               style={{
                 position: 'relative',
                 width: STAGE_W,
@@ -2648,11 +2667,24 @@ export default function MetallkartenEditor() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedId(field.id);
+                        setContextMenu(null);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                        setEditingTextId(null);
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          fieldId: field.id,
+                        });
                       }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         setSelectedId(field.id);
                         setEditingTextId(field.id);
+                        setContextMenu(null);
                       }}
                       onMouseDown={(e) => {
                         if (isEditing) return;
@@ -2765,6 +2797,18 @@ export default function MetallkartenEditor() {
                         e.stopPropagation();
                         setSelectedId(field.id);
                         setEditingTextId(null);
+                        setContextMenu(null);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                        setEditingTextId(null);
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          fieldId: field.id,
+                        });
                       }}
                       style={{
                         position: 'absolute',
@@ -2823,6 +2867,18 @@ export default function MetallkartenEditor() {
                         e.stopPropagation();
                         setSelectedId(field.id);
                         setEditingTextId(null);
+                        setContextMenu(null);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedId(field.id);
+                        setEditingTextId(null);
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          fieldId: field.id,
+                        });
                       }}
                       style={{
                         position: 'absolute',
@@ -2930,6 +2986,42 @@ export default function MetallkartenEditor() {
           </div>
         </main>
       </div>
+
+      {contextMenu ? (
+        <div
+          style={{
+            position: 'fixed',
+            left: contextMenu.x,
+            top: contextMenu.y,
+            background: '#fff',
+            border: '1px solid #d1d5db',
+            borderRadius: 10,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+            zIndex: 9999,
+            overflow: 'hidden',
+            minWidth: 140,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              removeField(contextMenu.fieldId);
+              setContextMenu(null);
+            }}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: 'none',
+              background: '#fff',
+              color: '#dc2626',
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+          >
+            Löschen
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
