@@ -509,8 +509,8 @@ function fieldBounds(field: Field) {
   const height = Math.max(lines.length, 1) * field.fontSize * 1.35;
   return { width, height };
 }
-function getFieldDistances(field: Field) {
-  const bounds = fieldBounds(field);
+function getFieldDistances(field: Field, measuredBounds?: { width: number; height: number }) {
+  const bounds = measuredBounds || fieldBounds(field);
 
   return {
     left: pxToMm(field.x),
@@ -1309,7 +1309,12 @@ export default function MetallkartenEditor() {
   const [, setQrMatrices] = useState<Record<string, boolean[][]>>({});
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
 
+  const [measuredFieldBounds, setMeasuredFieldBounds] = useState<
+  Record<string, { width: number; height: number }>
+>({});
+
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const activeCard = cards.find((card) => card.id === activeCardId) || cards[0];
 
   const fields = side === 'front' ? activeCard.frontFields : activeCard.backFields;
@@ -1324,7 +1329,8 @@ export default function MetallkartenEditor() {
 
   const selected = fields.find((f) => f.id === selectedId) || null;
   const contextField = contextMenu ? fields.find((f) => f.id === contextMenu.fieldId) || null : null;
-  const selectedDistances = selected ? getFieldDistances(selected) : null;
+  const selectedMeasuredBounds = selected ? measuredFieldBounds[selected.id] : undefined;
+const selectedDistances = selected ? getFieldDistances(selected, selectedMeasuredBounds) : null;
 
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
   const canExport = cleanOrderNumber.length >= 4;
@@ -1456,7 +1462,21 @@ export default function MetallkartenEditor() {
       active = false;
     };
   }, [cards]);
+useEffect(() => {
+  const nextBounds: Record<string, { width: number; height: number }> = {};
 
+  visibleFields.forEach((field) => {
+    const el = fieldRefs.current[field.id];
+    if (!el) return;
+
+    nextBounds[field.id] = {
+      width: el.offsetWidth,
+      height: el.offsetHeight,
+    };
+  });
+
+  setMeasuredFieldBounds(nextBounds);
+}, [visibleFields, selectedId, editingTextId, side, activeCardId, previewTextColor]);
   useEffect(() => {
     const logosToProcess: Array<{
       cardId: string;
@@ -2575,13 +2595,16 @@ export default function MetallkartenEditor() {
                     const isEditing = editingTextId === field.id;
 
                     return (
-                      <div
-                        key={field.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(field.id);
-                          setContextMenu(null);
-                        }}
+  <div
+    key={field.id}
+    ref={(el) => {
+      fieldRefs.current[field.id] = el;
+    }}
+    onClick={(e) => {
+      e.stopPropagation();
+      setSelectedId(field.id);
+      setContextMenu(null);
+    }}
                         onContextMenu={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -2673,7 +2696,10 @@ export default function MetallkartenEditor() {
                   if (field.type === 'qr') {
                     return (
                       <div
-                        key={field.id}
+  key={field.id}
+  ref={(el) => {
+    fieldRefs.current[field.id] = el;
+  }}
                         onMouseDown={(e) => onMouseDown(e, field)}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -2742,8 +2768,12 @@ export default function MetallkartenEditor() {
 
                   if (field.type === 'logo') {
                     return (
-                      <div
-                        key={field.id}
+                     <div
+  key={field.id}
+  ref={(el) => {
+    fieldRefs.current[field.id] = el;
+  }}
+ 
                         onMouseDown={(e) => onMouseDown(e, field)}
                         onClick={(e) => {
                           e.stopPropagation();
