@@ -1224,7 +1224,7 @@ function Panel({
         border: '1px solid #e5e7eb',
         borderRadius: 14,
         padding: 14,
-        background: '#ffffff',
+        background: '#ff2020',
         display: 'grid',
         gap: 12,
       }}
