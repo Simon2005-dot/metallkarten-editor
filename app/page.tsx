@@ -1285,7 +1285,7 @@ export default function MetallkartenEditor() {
   const [cards, setCards] = useState<CardDesign[]>([initialCard]);
   const [activeCardId, setActiveCardId] = useState<string>(initialCard.id);
   const [side, setSide] = useState<Side>('front');
-  const [selectedId, setSelectedId] = useState<string>(initialCard.frontFields[0]?.id || '');
+  const [selectedId, setSelectedId] = useState<string>('');
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragState>(null);
   const [resizing, setResizing] = useState<ResizeState>(null);
@@ -1549,7 +1549,7 @@ export default function MetallkartenEditor() {
     const newCard = createNewCardDesign(cards.length + 1);
     setCards((current) => [...current, newCard]);
     setActiveCardId(newCard.id);
-    setSelectedId(newCard.frontFields[0]?.id || '');
+    setSelectedId('');
     setSide('front');
     setGuideLines([]);
     setEditingTextId(null);
@@ -1567,7 +1567,7 @@ export default function MetallkartenEditor() {
 
     setCards((current) => [...current, duplicated]);
     setActiveCardId(duplicated.id);
-    setSelectedId(duplicated.frontFields[0]?.id || '');
+    setSelectedId('');
     setSide('front');
     setGuideLines([]);
     setEditingTextId(null);
@@ -1587,7 +1587,7 @@ export default function MetallkartenEditor() {
       if (activeCardId === cardId && nextActive) {
         setActiveCardId(nextActive.id);
         setSide('front');
-        setSelectedId(nextActive.frontFields[0]?.id || '');
+        setSelectedId('');
         setGuideLines([]);
         setEditingTextId(null);
         setContextMenu(null);
@@ -1703,7 +1703,7 @@ export default function MetallkartenEditor() {
 
   const removeField = (id: string) => {
     setFields((current) => current.filter((f) => f.id !== id));
-    setSelectedId((current) => (current === id ? fields[0]?.id || '' : current));
+    setSelectedId((current) => (current === id ? '' : current));
     setEditingTextId((current) => (current === id ? null : current));
     setContextMenu(null);
   };
@@ -1827,6 +1827,7 @@ export default function MetallkartenEditor() {
       if (event.key === 'Escape') {
         setEditingTextId(null);
         setContextMenu(null);
+        setSelectedId('');
       }
 
       if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -2011,7 +2012,11 @@ export default function MetallkartenEditor() {
         fontFamily: 'Arial, sans-serif',
         color: '#111827',
       }}
-      onClick={() => setContextMenu(null)}
+      onClick={() => {
+        setContextMenu(null);
+        setEditingTextId(null);
+        setSelectedId('');
+      }}
     >
       <div
         style={{
@@ -2036,6 +2041,7 @@ export default function MetallkartenEditor() {
             maxHeight: 'calc(100vh - 40px)',
             overflow: 'auto',
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <div
             style={{
@@ -2086,7 +2092,7 @@ export default function MetallkartenEditor() {
                     onClick={() => {
                       setActiveCardId(card.id);
                       setSide('front');
-                      setSelectedId(card.frontFields[0]?.id || '');
+                      setSelectedId('');
                       setGuideLines([]);
                       setEditingTextId(null);
                       setContextMenu(null);
@@ -2310,6 +2316,7 @@ export default function MetallkartenEditor() {
             display: 'grid',
             gap: 16,
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <div
             style={{
@@ -2394,7 +2401,7 @@ export default function MetallkartenEditor() {
             <button
               onClick={() => {
                 setSide('front');
-                setSelectedId(activeCard.frontFields[0]?.id || '');
+                setSelectedId('');
                 setGuideLines([]);
                 setEditingTextId(null);
                 setContextMenu(null);
@@ -2406,7 +2413,7 @@ export default function MetallkartenEditor() {
             <button
               onClick={() => {
                 setSide('back');
-                setSelectedId(activeCard.backFields[0]?.id || '');
+                setSelectedId('');
                 setGuideLines([]);
                 setEditingTextId(null);
                 setContextMenu(null);
@@ -2442,6 +2449,7 @@ export default function MetallkartenEditor() {
                 onClick={() => {
                   setEditingTextId(null);
                   setContextMenu(null);
+                  setSelectedId('');
                 }}
                 style={{
                   position: 'relative',
