@@ -2480,6 +2480,7 @@ export default function MetallkartenEditor() {
               alignItems: 'start',
             }}
           >
+            <div style={{ display: 'grid', gap: 14 }}>
             <div
               style={{
                 overflow: 'auto',
@@ -2529,7 +2530,7 @@ export default function MetallkartenEditor() {
                     }}
                   />
                 ) : null}
-
+                
                 {guideLines.map((line, index) =>
                   line.type === 'vertical' ? (
                     <div
@@ -2915,7 +2916,7 @@ export default function MetallkartenEditor() {
       </div>
     </div>
   </div>
-) : null}
+) : null}</div>
             <div style={{ display: 'grid', gap: 14 }}>
               <Panel title={selected ? `Ausgewählt: ${selected.label}` : 'Kein Element ausgewählt'}>
                 {selected ? (
