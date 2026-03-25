@@ -2285,26 +2285,65 @@ export default function MetallkartenEditor() {
             </div>
           </Panel>
 
-          <Panel title="Design exportieren" subtitle="Alle Karten werden zusammen als ZIP-Datei exportiert">
-            <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+          <section
+            style={{
+              border: '1px solid #e5e7eb',
+              borderRadius: 24,
+              padding: 24,
+              background: '#ffffff',
+              display: 'grid',
+              gap: 18,
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a' }}>
+                Design exportieren
+              </div>
+              <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6, lineHeight: 1.5 }}>
+                Alle Karten werden zusammen als ZIP-Datei exportiert
+              </div>
+            </div>
+
+            <div style={{ fontSize: 15, color: '#0f172a', lineHeight: 1.55 }}>
               Beim Export wird für jede Karte ein eigener Unterordner mit Vorderseite und Rückseite
               erstellt.
             </div>
+
+            <div
+              style={{
+                fontSize: 14,
+                lineHeight: 1.6,
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 16,
+                padding: 14,
+                color: '#0f172a',
+              }}
+            >
+              Die ZIP-Datei soll anschließend an folgende E-Mail geschickt werden:
+              <br />
+              <strong>Simons3d.factory@outlook.com</strong>
+            </div>
+
             <button
               onClick={exportAllCards}
               style={{
-                ...buttonStyle,
                 width: '100%',
-                background: '#111827',
-                color: '#fff',
-                borderColor: '#111827',
-                opacity: canExport && !isSubmitting ? 1 : 0.55,
+                padding: '20px 18px',
+                borderRadius: 20,
+                border: 'none',
+                background: canExport && !isSubmitting ? '#8b8d97' : '#b7bac2',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: 16,
+                cursor: canExport && !isSubmitting ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s ease',
               }}
               disabled={!canExport || isSubmitting}
             >
               {isSubmitting ? 'ZIP wird erstellt...' : `${cards.length} Karte(n) exportieren`}
             </button>
-          </Panel>
+          </section>
         </aside>
 
         <main
@@ -2319,66 +2358,64 @@ export default function MetallkartenEditor() {
           onClick={(e) => e.stopPropagation()}
         >
           <div
-  style={{
-    background: canExport ? '#f9fafb' : '#fef2f2',
-    border: canExport ? '1px solid #e5e7eb' : '2px solid #ef4444',
-    borderRadius: 16,
-    padding: 16,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  }}
->
-  {/* TOP BAR */}
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-    <div style={{ fontWeight: 700, fontSize: 16 }}>
-      Bestellnummer {canExport ? '' : 'fehlt'}
-    </div>
+            style={{
+              background: canExport ? '#f9fafb' : '#fef2f2',
+              border: canExport ? '1px solid #e5e7eb' : '2px solid #ef4444',
+              borderRadius: 16,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>
+                Bestellnummer {canExport ? '' : 'fehlt'}
+              </div>
 
-    <button
-      onClick={exportAllCards}
-      style={{
-        ...buttonStyle,
-        background: '#111827',
-        color: '#fff',
-        borderColor: '#111827',
-        opacity: canExport && !isSubmitting ? 1 : 0.5,
-        whiteSpace: 'nowrap',
-      }}
-      disabled={!canExport || isSubmitting}
-    >
-      {isSubmitting ? 'ZIP wird erstellt...' : 'Exportieren'}
-    </button>
-  </div>
+              <button
+                onClick={exportAllCards}
+                style={{
+                  ...buttonStyle,
+                  background: '#111827',
+                  color: '#fff',
+                  borderColor: '#111827',
+                  opacity: canExport && !isSubmitting ? 1 : 0.5,
+                  whiteSpace: 'nowrap',
+                }}
+                disabled={!canExport || isSubmitting}
+              >
+                {isSubmitting ? 'ZIP wird erstellt...' : 'Exportieren'}
+              </button>
+            </div>
 
-  {/* INPUT */}
-  <div
-    style={{
-      display: 'grid',
-      gridTemplateColumns: 'minmax(220px, 380px) 1fr',
-      gap: 12,
-      alignItems: 'center',
-    }}
-  >
-    <input
-      value={orderNumber}
-      onChange={(e) => setOrderNumber(e.target.value)}
-      placeholder="Bestellnummer oder Firmenname eingeben"
-      style={{
-        ...inputStyle,
-        marginTop: 0,
-        border: canExport ? '1px solid #d1d5db' : '2px solid #ef4444',
-        background: canExport ? '#ffffff' : '#fff7f7',
-        fontWeight: 700,
-      }}
-    />
-    <div style={{ fontSize: 13, color: canExport ? '#047857' : '#b91c1c' }}>
-      {canExport
-        ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten.zip`
-        : 'Bitte zuerst die Bestellnummer oder Firmenname eingeben'}
-    </div>
-  </div>
-</div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(220px, 380px) 1fr',
+                gap: 12,
+                alignItems: 'center',
+              }}
+            >
+              <input
+                value={orderNumber}
+                onChange={(e) => setOrderNumber(e.target.value)}
+                placeholder="Bestellnummer oder Firmenname eingeben"
+                style={{
+                  ...inputStyle,
+                  marginTop: 0,
+                  border: canExport ? '1px solid #d1d5db' : '2px solid #ef4444',
+                  background: canExport ? '#ffffff' : '#fff7f7',
+                  fontWeight: 700,
+                }}
+              />
+              <div style={{ fontSize: 13, color: canExport ? '#047857' : '#b91c1c' }}>
+                {canExport
+                  ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten.zip`
+                  : 'Bitte zuerst die Bestellnummer oder Firmenname eingeben'}
+              </div>
+            </div>
+          </div>
 
           <div
             style={{
