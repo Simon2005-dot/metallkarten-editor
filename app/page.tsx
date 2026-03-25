@@ -2369,21 +2369,6 @@ export default function MetallkartenEditor() {
               <div style={{ fontWeight: 700, fontSize: 16 }}>
                 Bestellnummer {canExport ? '' : 'fehlt'}
               </div>
-
-              <button
-                onClick={exportAllCards}
-                style={{
-                  ...buttonStyle,
-                  background: '#111827',
-                  color: '#fff',
-                  borderColor: '#111827',
-                  opacity: canExport && !isSubmitting ? 1 : 0.5,
-                  whiteSpace: 'nowrap',
-                }}
-                disabled={!canExport || isSubmitting}
-              >
-                {isSubmitting ? 'ZIP wird erstellt...' : 'Exportieren'}
-              </button>
             </div>
 
             <div
