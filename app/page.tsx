@@ -509,7 +509,16 @@ function fieldBounds(field: Field) {
   const height = Math.max(lines.length, 1) * field.fontSize * 1.35;
   return { width, height };
 }
+function getFieldDistances(field: Field) {
+  const bounds = fieldBounds(field);
 
+  return {
+    left: pxToMm(field.x),
+    right: pxToMm(STAGE_W - (field.x + bounds.width)),
+    top: pxToMm(field.y),
+    bottom: pxToMm(STAGE_H - (field.y + bounds.height)),
+  };
+}
 function duplicateField(field: Field): Field {
   if (field.type === 'logo') {
     const originalSrc = field.originalSrc || field.src;
@@ -1258,114 +1267,6 @@ function SelectionBadge({ width, height }: { width: number; height: number }) {
     </div>
   );
 }
-function DistanceGuides({ field }: { field: Field }) {
-  const bounds = fieldBounds(field);
-
-  const left = field.x;
-  const top = field.y;
-  const right = STAGE_W - (field.x + bounds.width);
-  const bottom = STAGE_H - (field.y + bounds.height);
-
-  const labelStyle: React.CSSProperties = {
-    position: 'absolute',
-    fontSize: 11,
-    background: 'rgba(17,24,39,0.88)',
-    color: '#fff',
-    padding: '2px 6px',
-    borderRadius: 999,
-    pointerEvents: 'none',
-    whiteSpace: 'nowrap',
-    zIndex: 80,
-  };
-
-  const lineStyle: React.CSSProperties = {
-    position: 'absolute',
-    pointerEvents: 'none',
-    background: '#f59e0b',
-    opacity: 0.9,
-    zIndex: 70,
-  };
-
-  return (
-    <>
-      <div
-        style={{
-          ...lineStyle,
-          left: 0,
-          top: field.y + bounds.height / 2,
-          width: field.x,
-          height: 1,
-        }}
-      />
-      <div
-        style={{
-          ...labelStyle,
-          left: Math.max(4, field.x / 2 - 20),
-          top: field.y + bounds.height / 2 - 20,
-        }}
-      >
-        {pxToMm(left).toFixed(1)} mm
-      </div>
-
-      <div
-        style={{
-          ...lineStyle,
-          left: field.x + bounds.width,
-          top: field.y + bounds.height / 2,
-          width: right,
-          height: 1,
-        }}
-      />
-      <div
-        style={{
-          ...labelStyle,
-          left: field.x + bounds.width + Math.max(4, right / 2 - 20),
-          top: field.y + bounds.height / 2 - 20,
-        }}
-      >
-        {pxToMm(right).toFixed(1)} mm
-      </div>
-
-      <div
-        style={{
-          ...lineStyle,
-          left: field.x + bounds.width / 2,
-          top: 0,
-          width: 1,
-          height: field.y,
-        }}
-      />
-      <div
-        style={{
-          ...labelStyle,
-          left: field.x + bounds.width / 2 + 8,
-          top: Math.max(4, field.y / 2 - 10),
-        }}
-      >
-        {pxToMm(top).toFixed(1)} mm
-      </div>
-
-      <div
-        style={{
-          ...lineStyle,
-          left: field.x + bounds.width / 2,
-          top: field.y + bounds.height,
-          width: 1,
-          height: bottom,
-        }}
-      />
-      <div
-        style={{
-          ...labelStyle,
-          left: field.x + bounds.width / 2 + 8,
-          top: field.y + bounds.height + Math.max(4, bottom / 2 - 10),
-        }}
-      >
-        {pxToMm(bottom).toFixed(1)} mm
-      </div>
-    </>
-  );
-}
 
 function createNfcField(): LogoField {
   return {
@@ -1423,6 +1324,7 @@ export default function MetallkartenEditor() {
 
   const selected = fields.find((f) => f.id === selectedId) || null;
   const contextField = contextMenu ? fields.find((f) => f.id === contextMenu.fieldId) || null : null;
+  const selectedDistances = selected ? getFieldDistances(selected) : null;
 
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
   const canExport = cleanOrderNumber.length >= 4;
@@ -2761,10 +2663,7 @@ export default function MetallkartenEditor() {
                           </div>
                         )}
                         {isSelected && !isEditing ? (
-                         <>
                           <SelectionBadge width={bounds.width} height={bounds.height} />
-                         <DistanceGuides field={field} />
-                        </>
                           ) : null}
                       </div>
                     );
@@ -2947,7 +2846,76 @@ export default function MetallkartenEditor() {
                 })}
               </div>
             </div>
+            {selected && selectedDistances ? (
+  <div
+    style={{
+      marginTop: 14,
+      border: '1px solid #e5e7eb',
+      borderRadius: 14,
+      background: '#ffffff',
+      padding: 14,
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+      gap: 12,
+    }}
+  >
+    <div
+      style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: 12,
+        padding: 10,
+        background: '#fafafa',
+      }}
+    >
+      <div style={{ fontSize: 12, color: '#6b7280' }}>Abstand links</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>
+        {selectedDistances.left.toFixed(1)} mm
+      </div>
+    </div>
 
+    <div
+      style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: 12,
+        padding: 10,
+        background: '#fafafa',
+      }}
+    >
+      <div style={{ fontSize: 12, color: '#6b7280' }}>Abstand rechts</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>
+        {selectedDistances.right.toFixed(1)} mm
+      </div>
+    </div>
+
+    <div
+      style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: 12,
+        padding: 10,
+        background: '#fafafa',
+      }}
+    >
+      <div style={{ fontSize: 12, color: '#6b7280' }}>Abstand oben</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>
+        {selectedDistances.top.toFixed(1)} mm
+      </div>
+    </div>
+
+    <div
+      style={{
+        border: '1px solid #e5e7eb',
+        borderRadius: 12,
+        padding: 10,
+        background: '#fafafa',
+      }}
+    >
+      <div style={{ fontSize: 12, color: '#6b7280' }}>Abstand unten</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>
+        {selectedDistances.bottom.toFixed(1)} mm
+      </div>
+    </div>
+  </div>
+) : null}
             <div style={{ display: 'grid', gap: 14 }}>
               <Panel title={selected ? `Ausgewählt: ${selected.label}` : 'Kein Element ausgewählt'}>
                 {selected ? (
