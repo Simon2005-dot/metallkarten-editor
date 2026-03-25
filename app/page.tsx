@@ -2300,13 +2300,10 @@ export default function MetallkartenEditor() {
                 Design exportieren
               </div>
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6, lineHeight: 1.5 }}>
-                Alle Karten werden zusammen als ZIP-Datei exportiert
               </div>
             </div>
 
             <div style={{ fontSize: 15, color: '#0f172a', lineHeight: 1.55 }}>
-              Beim Export wird für jede Karte ein eigener Unterordner mit Vorderseite und Rückseite
-              erstellt.
             </div>
 
             <div
