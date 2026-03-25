@@ -97,6 +97,12 @@ type VectorTraceResult = {
   vectorHeight: number;
 };
 
+type ContextMenuState = {
+  x: number;
+  y: number;
+  fieldId: string;
+} | null;
+
 const CARD_WIDTH = 85.6;
 const CARD_HEIGHT = 53.98;
 const PX_PER_MM = 7;
@@ -1270,11 +1276,7 @@ export default function MetallkartenEditor() {
   const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [, setQrMatrices] = useState<Record<string, boolean[][]>>({});
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    fieldId: string;
-  } | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const activeCard = cards.find((card) => card.id === activeCardId) || cards[0];
@@ -1290,6 +1292,8 @@ export default function MetallkartenEditor() {
   });
 
   const selected = fields.find((f) => f.id === selectedId) || null;
+  const contextField = contextMenu ? fields.find((f) => f.id === contextMenu.fieldId) || null : null;
+
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
   const canExport = cleanOrderNumber.length >= 4;
   const previewTextColor = getLaserColor(activeCard.cardFinish, side);
@@ -1493,6 +1497,7 @@ export default function MetallkartenEditor() {
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
+    setContextMenu(null);
   };
 
   const addMultilineField = () => {
@@ -1512,6 +1517,7 @@ export default function MetallkartenEditor() {
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
+    setContextMenu(null);
   };
 
   const addQrField = () => {
@@ -1527,6 +1533,7 @@ export default function MetallkartenEditor() {
     };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
+    setContextMenu(null);
   };
 
   const addNewCard = () => {
@@ -2987,7 +2994,7 @@ export default function MetallkartenEditor() {
         </main>
       </div>
 
-      {contextMenu ? (
+      {contextMenu && contextField ? (
         <div
           style={{
             position: 'fixed',
@@ -2999,23 +3006,92 @@ export default function MetallkartenEditor() {
             boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
             zIndex: 9999,
             overflow: 'hidden',
-            minWidth: 140,
+            minWidth: 220,
+            padding: 12,
+            display: 'grid',
+            gap: 10,
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {(contextField.type === 'text' || contextField.type === 'multiline') && (
+            <>
+              <div style={{ display: 'grid', gap: 4 }}>
+                <label style={{ fontSize: 12, color: '#6b7280' }}>
+                  Schriftgröße: {contextField.fontSize}px
+                </label>
+                <input
+                  type="range"
+                  min={8}
+                  max={36}
+                  step={1}
+                  value={contextField.fontSize}
+                  onChange={(e) =>
+                    updateField(contextField.id, {
+                      fontSize: Number(e.target.value),
+                    })
+                  }
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gap: 4 }}>
+                <label style={{ fontSize: 12, color: '#6b7280' }}>
+                  Stärke: {contextField.fontWeight}
+                </label>
+                <input
+                  type="range"
+                  min={300}
+                  max={800}
+                  step={100}
+                  value={contextField.fontWeight}
+                  onChange={(e) =>
+                    updateField(contextField.id, {
+                      fontWeight: Number(e.target.value),
+                    })
+                  }
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gap: 4 }}>
+                <label style={{ fontSize: 12, color: '#6b7280' }}>Schriftart</label>
+                <select
+                  value={contextField.fontFamily}
+                  onChange={(e) =>
+                    updateField(contextField.id, {
+                      fontFamily: e.target.value as FontFamilyKey,
+                    })
+                  }
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    background: '#fff',
+                  }}
+                >
+                  {Object.entries(FONT_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
           <button
-            onClick={() => {
-              removeField(contextMenu.fieldId);
-              setContextMenu(null);
-            }}
+            onClick={() => removeField(contextField.id)}
             style={{
               width: '100%',
               padding: '10px 12px',
               border: 'none',
-              background: '#fff',
-              color: '#dc2626',
+              borderRadius: 8,
+              background: '#fee2e2',
+              color: '#b91c1c',
               textAlign: 'left',
               cursor: 'pointer',
+              fontWeight: 700,
             }}
           >
             Löschen
