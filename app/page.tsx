@@ -3110,21 +3110,27 @@ const placeholderFill =
 
                     {selected.type === 'multiline' && (
                       <>
-<div>
-  <label>Textfarbe</label>
-  <input
-    type="color"
-    value={selected.color || '#000000'}
-    onChange={(e) =>
-      updateField(selected.id, { color: e.target.value })
-    }
-    style={{
-      ...inputStyle,
-      padding: 4,
-      height: 44,
-    }}
-  />
-</div>
+{outputMode === 'uv' ? (
+  <div>
+    <label>Textfarbe</label>
+    <input
+      type="color"
+      value={selected.color ?? '#000000'}
+      onChange={(e) =>
+        updateField(selected.id, { color: e.target.value })
+      }
+      style={{
+        ...inputStyle,
+        padding: 4,
+        height: 44,
+      }}
+    />
+  </div>
+) : (
+  <div style={{ fontSize: 12, color: '#6b7280' }}>
+    Im Laser-Modus wird Text als Gravur dargestellt. Textfarbe ist nur im UV-Modus aktiv.
+  </div>
+)}
                         <div>
                           <label>Text</label>
                           <textarea
@@ -3401,24 +3407,26 @@ const placeholderFill =
                   ))}
                 </select>
               </div>
-              <div style={{ display: 'grid', gap: 4 }}>
-  <label style={{ fontSize: 12, color: '#6b7280' }}>Textfarbe</label>
-  <input
-    type="color"
-    value={contextField.color || '#000000'}
-    onChange={(e) =>
-      updateField(contextField.id, { color: e.target.value })
-    }
-    style={{
-      width: '100%',
-      height: 42,
-      borderRadius: 8,
-      border: '1px solid #d1d5db',
-      background: '#fff',
-      padding: 4,
-    }}
-  />
-</div>
+              {outputMode === 'uv' ? (
+  <div style={{ display: 'grid', gap: 4 }}>
+    <label style={{ fontSize: 12, color: '#6b7280' }}>Textfarbe</label>
+    <input
+      type="color"
+      value={contextField.color ?? '#000000'}
+      onChange={(e) =>
+        updateField(contextField.id, { color: e.target.value })
+      }
+      style={{
+        width: '100%',
+        height: 42,
+        borderRadius: 8,
+        border: '1px solid #d1d5db',
+        background: '#fff',
+        padding: 4,
+      }}
+    />
+  </div>
+) : null}
             </>
           )}
 
