@@ -2785,7 +2785,7 @@ const placeholderFill =
                           <div
                             style={{
                               fontSize: field.fontSize,
-                              color: outputMode === 'uv' ? field.color || '#000000' : previewTextColor,
+                              color: field.color || '#000000',
                               fontWeight: field.fontWeight,
                               lineHeight: 1.35,
                               textAlign: field.align,
