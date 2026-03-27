@@ -2784,17 +2784,20 @@ const placeholderFill =
                         ) : (
                           <div
                             style={{
-                              fontSize: field.fontSize,
-                              color: field.color || '#000000',
-                              fontWeight: field.fontWeight,
-                              lineHeight: 1.35,
-                              textAlign: field.align,
-                              fontFamily,
-                              textShadow:
-  outputMode === 'uv'
-    ? 'none'
-    : '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
-                            }}
+  fontSize: field.fontSize,
+  color:
+    outputMode === 'uv'
+      ? field.color ?? '#000000'
+      : previewTextColor,
+  fontWeight: field.fontWeight,
+  lineHeight: 1.35,
+  textAlign: field.align,
+  fontFamily,
+  textShadow:
+    outputMode === 'uv'
+      ? 'none'
+      : '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
+}}
                           >
                             {lines.map((line, index) => (
                               <div key={index}>{line}</div>
