@@ -35,6 +35,8 @@ type QrField = BaseField & {
   type: 'qr';
   text: string;
   size: number;
+  color?: string;
+  backgroundColor?: string;
 };
 
 type LogoField = BaseField & {
@@ -53,11 +55,13 @@ type LogoField = BaseField & {
   vectorWidth?: number;
   vectorHeight?: number;
   vectorStatus?: 'idle' | 'processing' | 'ready' | 'error';
+  preserveFullColor?: boolean;
 };
 
 type Field = TextField | QrField | LogoField;
 type Side = 'front' | 'back';
 type CardFinishKey = 'black' | 'silver' | 'gold';
+type OutputMode = 'laser' | 'uv';
 
 type DragState = {
   id: string;
@@ -241,14 +245,16 @@ const frontDefaultFields: Field[] = [
     fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
-    id: 'qr-front',
-    type: 'qr',
-    label: 'QR Platzhalter',
-    text: '',
-    x: STAGE_W - 120,
-    y: STAGE_H - 120,
-    size: 90,
-  },
+  id: 'qr-front',
+  type: 'qr',
+  label: 'QR Platzhalter',
+  text: '',
+  x: STAGE_W - 120,
+  y: STAGE_H - 120,
+  size: 90,
+  color: '#000000',
+  backgroundColor: '#ffffff',
+},
 ];
 
 const backDefaultFields: Field[] = [
@@ -279,14 +285,16 @@ const backDefaultFields: Field[] = [
     fontFamily: DEFAULT_FONT_FAMILY,
   },
   {
-    id: 'back-qr',
-    type: 'qr',
-    label: 'QR Platzhalter Rückseite',
-    text: '',
-    x: STAGE_W - 150,
-    y: 40,
-    size: 110,
-  },
+  id: 'back-qr',
+  type: 'qr',
+  label: 'QR Platzhalter Rückseite',
+  text: '',
+  x: STAGE_W - 150,
+  y: 40,
+  size: 110,
+  color: '#000000',
+  backgroundColor: '#ffffff',
+},
   {
     id: 'back-nfc-icon',
     type: 'logo',
@@ -466,7 +474,7 @@ function textToSvg(field: TextField) {
     .join('');
 }
 
-function qrSvgGroup(field: PreparedQrField) {
+function qrSvgGroup(field: PreparedQrField, outputMode: OutputMode) {
   const qrMatrix =
     field.qrMatrix && field.qrMatrix.length > 0
       ? field.qrMatrix
@@ -474,19 +482,36 @@ function qrSvgGroup(field: PreparedQrField) {
 
   const moduleSize = field.size / qrMatrix.length;
   const { offset, size } = getQrModuleRect(moduleSize);
-  let rects = '';
+
+  const fill = outputMode === 'uv' ? field.color || '#000000' : '#000000';
+  const bg = outputMode === 'uv' ? field.backgroundColor || '#ffffff' : '#ffffff';
+
+  let rects = `<rect x="${field.x}" y="${field.y}" width="${field.size}" height="${field.size}" fill="${bg}" rx="8" />`;
 
   qrMatrix.forEach((row, y) => {
     row.forEach((cell, x) => {
       if (!cell) return;
-      rects += `<rect x="${field.x + x * moduleSize + offset}" y="${field.y + y * moduleSize + offset}" width="${size}" height="${size}" fill="black" shape-rendering="crispEdges" />`;
+      rects += `<rect x="${field.x + x * moduleSize + offset}" y="${field.y + y * moduleSize + offset}" width="${size}" height="${size}" fill="${fill}" shape-rendering="crispEdges" />`;
     });
   });
 
   return rects;
 }
 
-function logoToSvg(field: LogoField) {
+function logoToSvg(field: LogoField, outputMode: OutputMode) {
+  if (outputMode === 'uv') {
+    const imageSrc = field.originalSrc || field.src;
+
+    return `<image
+      x="${field.x}"
+      y="${field.y}"
+      width="${field.width}"
+      height="${field.height}"
+      preserveAspectRatio="xMidYMid meet"
+      href="${escapeAttribute(imageSrc)}"
+    />`;
+  }
+
   if (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight) {
     throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
   }
@@ -549,18 +574,32 @@ function duplicateField(field: Field): Field {
   };
 }
 
-function ensureBlackText(fields: Field[]) {
+function ensureBlackText(fields: Field[], outputMode: OutputMode) {
+  if (outputMode === 'uv') return fields;
+
   return fields.map((field) => {
     if (field.type === 'multiline') {
       return { ...field, color: DEFAULT_TEXT_COLOR };
     }
+
+    if (field.type === 'qr') {
+      return {
+        ...field,
+        color: '#000000',
+        backgroundColor: '#ffffff',
+      };
+    }
+
     return field;
   });
 }
 
-async function prepareFieldsForExport(fields: Field[]): Promise<PreparedField[]> {
+async function prepareFieldsForExport(
+  fields: Field[],
+  outputMode: OutputMode,
+): Promise<PreparedField[]> {
   return Promise.all(
-    ensureBlackText(fields).map(async (field) => {
+    ensureBlackText(fields, outputMode).map(async (field) => {
       if (field.type === 'logo') {
         return field;
       }
@@ -580,12 +619,13 @@ function exportSideSvg(
   fields: PreparedField[],
   includeGuide: boolean,
   meta: { orderNumber: string; side: Side; cardName: string },
+  outputMode: OutputMode,
 ) {
   const content = fields
     .map((field) => {
       if (field.type === 'multiline') return textToSvg(field);
-      if (field.type === 'qr') return qrSvgGroup(field);
-      if (field.type === 'logo') return logoToSvg(field);
+if (field.type === 'qr') return qrSvgGroup(field, outputMode);
+if (field.type === 'logo') return logoToSvg(field, outputMode);
       return '';
     })
     .join('\n');
@@ -1308,7 +1348,7 @@ export default function MetallkartenEditor() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [, setQrMatrices] = useState<Record<string, boolean[][]>>({});
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
-
+  const [outputMode, setOutputMode] = useState<OutputMode>('laser');
   const [measuredFieldBounds, setMeasuredFieldBounds] = useState<
   Record<string, { width: number; height: number }>
 >({});
@@ -1553,16 +1593,18 @@ useEffect(() => {
   };
 
   const addQrField = () => {
-    const id = buildUniqueId('qr');
-    const newField: QrField = {
-      id,
-      type: 'qr',
-      label: 'QR Platzhalter',
-      text: '',
-      x: 80,
-      y: 80,
-      size: 96,
-    };
+  const id = buildUniqueId('qr');
+  const newField: QrField = {
+    id,
+    type: 'qr',
+    label: 'QR Platzhalter',
+    text: '',
+    x: 80,
+    y: 80,
+    size: 96,
+    color: '#000000',
+    backgroundColor: '#ffffff',
+  };
     setFields((current) => [...current, newField]);
     setSelectedId(id);
     setContextMenu(null);
@@ -1939,29 +1981,41 @@ useEffect(() => {
         });
 
         const [preparedFront, preparedBack] = await Promise.all([
-          prepareFieldsForExport(visibleFrontFields),
-          prepareFieldsForExport(visibleBackFields),
-        ]);
+  prepareFieldsForExport(visibleFrontFields, outputMode),
+  prepareFieldsForExport(visibleBackFields, outputMode),
+]);
 
         const safeCardName = sanitizeOrderNumber(card.name) || 'metallkarte';
 
-        const frontSvg = exportSideSvg(preparedFront, true, {
-          orderNumber: cleanOrderNumber,
-          side: 'front',
-          cardName: card.name,
-        });
+const frontSvg = exportSideSvg(
+  preparedFront,
+  true,
+  {
+    orderNumber: cleanOrderNumber,
+    side: 'front',
+    cardName: card.name,
+  },
+  outputMode,
+);
 
-        const backSvg = exportSideSvg(preparedBack, true, {
-          orderNumber: cleanOrderNumber,
-          side: 'back',
-          cardName: card.name,
-        });
-
-        if (frontSvg.includes('<image') || backSvg.includes('<image')) {
-          throw new Error(
-            'Export enthält noch Rasterbilder (<image>). Bitte alle Logos/Screenshots vollständig vektorisieren.',
-          );
-        }
+const backSvg = exportSideSvg(
+  preparedBack,
+  true,
+  {
+    orderNumber: cleanOrderNumber,
+    side: 'back',
+    cardName: card.name,
+  },
+  outputMode,
+);
+        if (
+  outputMode === 'laser' &&
+  (frontSvg.includes('<image') || backSvg.includes('<image'))
+) {
+  throw new Error(
+    'Export enthält noch Rasterbilder (<image>). Bitte alle Logos/Screenshots vollständig vektorisieren.',
+  );
+}
 
         zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-vorderseite.svg`, frontSvg);
         zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-rueckseite.svg`, backSvg);
@@ -1971,7 +2025,7 @@ useEffect(() => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${cleanOrderNumber}-alle-karten.zip`;
+      a.download = `${cleanOrderNumber}-alle-karten-${outputMode}.zip`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -1989,8 +2043,11 @@ useEffect(() => {
   const getDisplaySrc = (field: Field) => (field.type === 'logo' ? field.src : '');
 
   const renderQrPreview = (field: QrField) => {
-    const placeholderStroke = previewTextColor;
-    const placeholderFill = 'rgba(255,255,255,0.04)';
+    const placeholderStroke =
+  outputMode === 'uv' ? field.color || '#000000' : previewTextColor;
+
+const placeholderFill =
+  outputMode === 'uv' ? field.backgroundColor || '#ffffff' : 'rgba(255,255,255,0.04)';
 
     return (
       <svg width={field.size} height={field.size} viewBox={`0 0 ${field.size} ${field.size}`}>
@@ -2189,7 +2246,26 @@ useEffect(() => {
               })}
             </div>
           </Panel>
+<Panel title="Ausgabemodus" subtitle="Wähle zwischen Laser-Gravur und UV-Druck">
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+    <button
+      onClick={() => setOutputMode('laser')}
+      style={outputMode === 'laser' ? activeTabStyle : tabStyle}
+    >
+      Laser
+    </button>
+    <button
+      onClick={() => setOutputMode('uv')}
+      style={outputMode === 'uv' ? activeTabStyle : tabStyle}
+    >
+      UV-Druck
+    </button>
+  </div>
 
+  <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
+    Laser = schwarze Gravurdatei. UV-Druck = farbige Gestaltung mit Text-, QR- und Bildfarben.
+  </div>
+</Panel>
           <Panel title="Ansicht">
             <label style={toggleRowStyle}>
               <span>Sicherheitsbereich</span>
@@ -2368,7 +2444,9 @@ useEffect(() => {
               }}
               disabled={!canExport || isSubmitting}
             >
-              {isSubmitting ? 'ZIP wird erstellt...' : `${cards.length} Karte(n) exportieren`}
+              {isSubmitting
+  ? 'ZIP wird erstellt...'
+  : `${cards.length} Karte(n) als ${outputMode === 'laser' ? 'Laser' : 'UV'} exportieren`}
             </button>
           </section>
         </aside>
@@ -2441,9 +2519,9 @@ useEffect(() => {
             <div>
               <h2 style={{ margin: 0, fontSize: 24 }}>Live Vorschau</h2>
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-                {CARD_WIDTH} mm × {CARD_HEIGHT} mm · {side === 'front' ? 'Vorderseite' : 'Rückseite'} ·
-                Vorschau · {activeCard.name}
-              </div>
+  {CARD_WIDTH} mm × {CARD_HEIGHT} mm · {side === 'front' ? 'Vorderseite' : 'Rückseite'} ·
+  Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-Druck'}
+</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <div style={statStyle}>
@@ -2673,7 +2751,7 @@ useEffect(() => {
                           <div
                             style={{
                               fontSize: field.fontSize,
-                              color: previewTextColor,
+                              color: outputMode === 'uv' ? field.color || '#000000' : previewTextColor,
                               fontWeight: field.fontWeight,
                               lineHeight: 1.35,
                               textAlign: field.align,
@@ -2807,22 +2885,38 @@ useEffect(() => {
                           justifyContent: 'center',
                         }}
                       >
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            WebkitMaskImage: `url(${getDisplaySrc(field)})`,
-                            WebkitMaskRepeat: 'no-repeat',
-                            WebkitMaskSize: 'contain',
-                            WebkitMaskPosition: 'center',
-                            maskImage: `url(${getDisplaySrc(field)})`,
-                            maskRepeat: 'no-repeat',
-                            maskSize: 'contain',
-                            maskPosition: 'center',
-                            backgroundColor: previewTextColor,
-                            opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
-                          }}
-                        />
+                       {outputMode === 'uv' ? (
+  <img
+    src={field.originalSrc || field.src}
+    alt={field.label}
+    draggable={false}
+    style={{
+      width: '100%',
+      height: '100%',
+      objectFit: 'contain',
+      opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
+      pointerEvents: 'none',
+      userSelect: 'none',
+    }}
+  />
+) : (
+  <div
+    style={{
+      width: '100%',
+      height: '100%',
+      WebkitMaskImage: `url(${getDisplaySrc(field)})`,
+      WebkitMaskRepeat: 'no-repeat',
+      WebkitMaskSize: 'contain',
+      WebkitMaskPosition: 'center',
+      maskImage: `url(${getDisplaySrc(field)})`,
+      maskRepeat: 'no-repeat',
+      maskSize: 'contain',
+      maskPosition: 'center',
+      backgroundColor: previewTextColor,
+      opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
+    }}
+  />
+)}
                         {field.vectorStatus === 'processing' ? (
                           <div
                             style={{
@@ -2976,6 +3070,21 @@ useEffect(() => {
 
                     {selected.type === 'multiline' && (
                       <>
+                      {outputMode === 'uv' ? (
+  <div>
+    <label>Textfarbe</label>
+    <input
+      type="color"
+      value={selected.color || '#000000'}
+      onChange={(e) => updateField(selected.id, { color: e.target.value })}
+      style={{
+        ...inputStyle,
+        padding: 4,
+        height: 44,
+      }}
+    />
+  </div>
+) : null}
                         <div>
                           <label>Text</label>
                           <textarea
@@ -3053,7 +3162,39 @@ useEffect(() => {
                     )}
 
                     {selected.type === 'qr' && (
-                      <>
+                      <>{outputMode === 'uv' ? (
+  <>
+    <div>
+      <label>QR-Farbe</label>
+      <input
+        type="color"
+        value={selected.color || '#000000'}
+        onChange={(e) => updateField(selected.id, { color: e.target.value })}
+        style={{
+          ...inputStyle,
+          padding: 4,
+          height: 44,
+        }}
+      />
+    </div>
+
+    <div>
+      <label>QR-Hintergrund</label>
+      <input
+        type="color"
+        value={selected.backgroundColor || '#ffffff'}
+        onChange={(e) =>
+          updateField(selected.id, { backgroundColor: e.target.value })
+        }
+        style={{
+          ...inputStyle,
+          padding: 4,
+          height: 44,
+        }}
+      />
+    </div>
+  </>
+) : null}
                         <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
                           Dieses Element ist nur ein QR-Platzhalter. Der echte QR-Code wird später eingefügt.
                         </div>
