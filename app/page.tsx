@@ -500,7 +500,7 @@ function qrSvgGroup(field: PreparedQrField, outputMode: OutputMode) {
 
 function logoToSvg(field: LogoField, outputMode: OutputMode) {
   if (outputMode === 'uv') {
-    const imageSrc = field.originalSrc || field.src;
+    const imageSrc = field.exportSrc || field.originalSrc || field.src;
 
     return `<image
       x="${field.x}"
@@ -1048,6 +1048,21 @@ type Edge = {
   ex: number;
   ey: number;
 };
+function applyMaskToImageData(imageData: ImageData, mask: boolean[][]) {
+  const { width, height, data } = imageData;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+
+      if (!mask[y][x]) {
+        data[i + 3] = 0;
+      }
+    }
+  }
+
+  return imageData;
+}
 
 function buildEdgesFromMask(mask: boolean[][]) {
   const h = mask.length;
@@ -1227,10 +1242,29 @@ async function traceImageToVectorAsset(
   const boosted = boostContrast(imageData, options?.contrast ?? 40);
 
   const mask = maskFromImageData(
-    boosted,
-    options?.whiteThreshold ?? 235,
-    options?.laserThreshold ?? 165,
-  );
+  boosted,
+  options?.whiteThreshold ?? 245,
+  options?.laserThreshold ?? 180,
+);
+const transparentImageData = new ImageData(
+  new Uint8ClampedArray(boosted.data),
+  boosted.width,
+  boosted.height,
+);
+
+applyMaskToImageData(transparentImageData, mask);
+
+const previewCanvas = document.createElement('canvas');
+previewCanvas.width = transparentImageData.width;
+previewCanvas.height = transparentImageData.height;
+
+const previewCtx = previewCanvas.getContext('2d');
+if (!previewCtx) {
+  throw new Error('Preview-Canvas konnte nicht erstellt werden.');
+}
+
+previewCtx.putImageData(transparentImageData, 0, 0);
+const transparentPreviewSrc = previewCanvas.toDataURL('image/png');
 
   const cropped = cropMask(mask, 2);
   const edges = buildEdgesFromMask(cropped.mask);
@@ -1251,11 +1285,11 @@ async function traceImageToVectorAsset(
 </svg>`;
 
   return {
-    previewSrc: svgDataUrl(previewSvg),
-    vectorMarkup,
-    vectorWidth,
-    vectorHeight,
-  };
+  previewSrc: transparentPreviewSrc,
+  vectorMarkup,
+  vectorWidth,
+  vectorHeight,
+};
 }
 
 function Panel({
@@ -1518,6 +1552,8 @@ useEffect(() => {
   setMeasuredFieldBounds(nextBounds);
 }, [visibleFields, selectedId, editingTextId, side, activeCardId, previewTextColor]);
   useEffect(() => {
+    if (outputMode !== 'laser') return;
+
     const logosToProcess: Array<{
       cardId: string;
       side: Side;
@@ -1559,18 +1595,16 @@ useEffect(() => {
     for (const item of logosToProcess) {
       void vectorizeExistingLogo(item.cardId, item.side, item.field);
     }
-  }, [cards]);
+  },  [cards, outputMode]);
 
   const updateField = (id: string, patch: Partial<Field>) => {
-    setFields((current) =>
-      current.map((f) => {
-        if (f.id !== id) return f;
-        const next = { ...f, ...patch } as Field;
-        if (next.type === 'multiline') next.color = DEFAULT_TEXT_COLOR;
-        return next;
-      }),
-    );
-  };
+  setFields((current) =>
+    current.map((f) => {
+      if (f.id !== id) return f;
+      return { ...f, ...patch } as Field;
+    }),
+  );
+};
 
   const addMultilineField = () => {
     const id = buildUniqueId('multi');
@@ -2017,8 +2051,8 @@ const backSvg = exportSideSvg(
   );
 }
 
-        zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-vorderseite.svg`, frontSvg);
-        zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-rueckseite.svg`, backSvg);
+       zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-vorderseite-${outputMode}.svg`, frontSvg);
+zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-rueckseite-${outputMode}.svg`, backSvg);
       }
 
       const blob = await zip.generateAsync({ type: 'blob' });
@@ -2501,8 +2535,8 @@ const placeholderFill =
               />
               <div style={{ fontSize: 13, color: canExport ? '#047857' : '#b91c1c' }}>
                 {canExport
-                  ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten.zip`
-                  : 'Bitte zuerst die Bestellnummer oder Firmenname eingeben'}
+  ? `ZIP-Datei: ${cleanOrderNumber}-alle-karten-${outputMode}.zip`
+  : 'Bitte zuerst die Bestellnummer oder Firmenname eingeben'}
               </div>
             </div>
           </div>
@@ -2756,7 +2790,10 @@ const placeholderFill =
                               lineHeight: 1.35,
                               textAlign: field.align,
                               fontFamily,
-                              textShadow: '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
+                              textShadow:
+  outputMode === 'uv'
+    ? 'none'
+    : '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
                             }}
                           >
                             {lines.map((line, index) => (
@@ -2887,7 +2924,7 @@ const placeholderFill =
                       >
                        {outputMode === 'uv' ? (
   <img
-    src={field.originalSrc || field.src}
+  src={field.exportSrc || field.originalSrc || field.src}
     alt={field.label}
     draggable={false}
     style={{
@@ -2912,7 +2949,7 @@ const placeholderFill =
       maskRepeat: 'no-repeat',
       maskSize: 'contain',
       maskPosition: 'center',
-      backgroundColor: previewTextColor,
+     backgroundColor: previewTextColor,
       opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
     }}
   />
@@ -3070,21 +3107,21 @@ const placeholderFill =
 
                     {selected.type === 'multiline' && (
                       <>
-                      {outputMode === 'uv' ? (
-  <div>
-    <label>Textfarbe</label>
-    <input
-      type="color"
-      value={selected.color || '#000000'}
-      onChange={(e) => updateField(selected.id, { color: e.target.value })}
-      style={{
-        ...inputStyle,
-        padding: 4,
-        height: 44,
-      }}
-    />
-  </div>
-) : null}
+<div>
+  <label>Textfarbe</label>
+  <input
+    type="color"
+    value={selected.color || '#000000'}
+    onChange={(e) =>
+      updateField(selected.id, { color: e.target.value })
+    }
+    style={{
+      ...inputStyle,
+      padding: 4,
+      height: 44,
+    }}
+  />
+</div>
                         <div>
                           <label>Text</label>
                           <textarea
@@ -3361,6 +3398,24 @@ const placeholderFill =
                   ))}
                 </select>
               </div>
+              <div style={{ display: 'grid', gap: 4 }}>
+  <label style={{ fontSize: 12, color: '#6b7280' }}>Textfarbe</label>
+  <input
+    type="color"
+    value={contextField.color || '#000000'}
+    onChange={(e) =>
+      updateField(contextField.id, { color: e.target.value })
+    }
+    style={{
+      width: '100%',
+      height: 42,
+      borderRadius: 8,
+      border: '1px solid #d1d5db',
+      background: '#fff',
+      padding: 4,
+    }}
+  />
+</div>
             </>
           )}
 
