@@ -1086,6 +1086,15 @@ const selectedDistances = selected
  const previewTextColor = getLaserColor(activeCard.cardFinish, side);
   const currentBackground = product.backgrounds[activeCard.cardFinish];
   const frameStyle = product.frameStyles[activeCard.cardFinish];
+  const shapePath = product.clipPathSvg?.(STAGE_W, STAGE_H) ?? '';
+  const clipId = `product-clip-${productKey}`;
+  const holePx = product.hole
+  ? {
+      x: mmToPx(product.hole.x, PX_PER_MM),
+      y: mmToPx(product.hole.y, PX_PER_MM),
+      radius: mmToPx(product.hole.radius, PX_PER_MM),
+    }
+  : null;
 
   const updateCardById = (cardId: string, patch: Partial<CardDesign>) => {
     setCards((current) => current.map((card) => (card.id === cardId ? { ...card, ...patch } : card)));
@@ -2328,32 +2337,72 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
               }}
             >
               <div
-                ref={stageRef}
-                onMouseMove={onMouseMove}
-                onMouseUp={clearInteractionState}
-                onMouseLeave={clearInteractionState}
-                onClick={() => {
-                  setEditingTextId(null);
-                  setContextMenu(null);
-                  setSelectedId('');
-                }}
-                style={{
-                  position: 'relative',
-                  width: STAGE_W,
-                  height: STAGE_H,
-                  border: `1px solid ${frameStyle.border}`,
-                  borderRadius: 18,
-                  userSelect: 'none',
-                  overflow: 'hidden',
-                  backgroundImage: showGrid
-                    ? `linear-gradient(to right, ${frameStyle.gridLine} 1px, transparent 1px), linear-gradient(to bottom, ${frameStyle.gridLine} 1px, transparent 1px), url(${currentBackground})`
-                    : `url(${currentBackground})`,
-                  backgroundSize: showGrid ? '20px 20px, 20px 20px, cover' : 'cover',
-                  backgroundPosition: showGrid ? '0 0, 0 0, center' : 'center',
-                  backgroundRepeat: 'repeat, repeat, no-repeat',
-                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
-                }}
-              >
+  ref={stageRef}
+  onMouseMove={onMouseMove}
+  onMouseUp={clearInteractionState}
+  onMouseLeave={clearInteractionState}
+  onClick={() => {
+    setEditingTextId(null);
+    setContextMenu(null);
+    setSelectedId('');
+  }}
+  style={{
+    position: 'relative',
+    width: STAGE_W,
+    height: STAGE_H,
+    userSelect: 'none',
+  }}
+>
+  {shapePath ? (
+    <svg
+      width={0}
+      height={0}
+      style={{ position: 'absolute' }}
+      aria-hidden="true"
+    >
+      <defs>
+        <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+          <path d={shapePath} fillRule="evenodd" />
+        </clipPath>
+      </defs>
+    </svg>
+  ) : null}
+
+  <div
+    style={{
+      position: 'absolute',
+      inset: 0,
+      border: `1px solid ${frameStyle.border}`,
+      borderRadius: shapePath ? 0 : 18,
+      overflow: 'hidden',
+      clipPath: shapePath ? `url(#${clipId})` : undefined,
+      WebkitClipPath: shapePath ? `url(#${clipId})` : undefined,
+      backgroundImage: showGrid
+        ? `linear-gradient(to right, ${frameStyle.gridLine} 1px, transparent 1px), linear-gradient(to bottom, ${frameStyle.gridLine} 1px, transparent 1px), url(${currentBackground})`
+        : `url(${currentBackground})`,
+      backgroundSize: showGrid ? '20px 20px, 20px 20px, cover' : 'cover',
+      backgroundPosition: showGrid ? '0 0, 0 0, center' : 'center',
+      backgroundRepeat: 'repeat, repeat, no-repeat',
+      boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
+    }}
+  >    {holePx ? (
+      <div
+        style={{
+          position: 'absolute',
+          left: holePx.x - holePx.radius,
+          top: holePx.y - holePx.radius,
+          width: holePx.radius * 2,
+          height: holePx.radius * 2,
+          borderRadius: '50%',
+          background: '#f3f4f6',
+          border: `1px solid ${frameStyle.border}`,
+          pointerEvents: 'none',
+          zIndex: 30,
+        }}
+      />
+    ) : null}
+  </div>
+</div></div>
                 {showSafeArea ? (
                   <div
                     style={{

@@ -122,6 +122,7 @@ export type DesignerProduct = {
     y: number;
     radius: number;
   };
+  clipPathSvg?: (stageW: number, stageH: number) => string;
   backgrounds: Record<string, string>;
   frameStyles: Record<
     string,
