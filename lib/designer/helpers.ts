@@ -1,4 +1,4 @@
-import type { Field } from './types';
+import type { Field } from '@/lib/designer/types';
 
 export function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -16,6 +16,10 @@ export function roundToGrid(value: number, gridSize: number) {
   return Math.round(value / gridSize) * gridSize;
 }
 
+export function buildUniqueId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function sanitizeOrderNumber(value: string) {
   return String(value || '')
     .trim()
@@ -31,18 +35,9 @@ export function normalizeQrValue(value: string) {
   return raw;
 }
 
-export function buildUniqueId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export function fieldBounds(field: Field) {
-  if (field.type === 'qr') {
-    return { width: field.size, height: field.size };
-  }
-
-  if (field.type === 'logo') {
-    return { width: field.width, height: field.height };
-  }
+  if (field.type === 'qr') return { width: field.size, height: field.size };
+  if (field.type === 'logo') return { width: field.width, height: field.height };
 
   const lines = String(field.text || '').split('\n');
   const maxChars = Math.max(...lines.map((line) => line.length), 1);
@@ -62,10 +57,10 @@ export function getFieldDistances(
   const bounds = measuredBounds || fieldBounds(field);
 
   return {
-    left: pxToMm(field.x, pxPerMm),
-    right: pxToMm(stageW - (field.x + bounds.width), pxPerMm),
-    top: pxToMm(field.y, pxPerMm),
-    bottom: pxToMm(stageH - (field.y + bounds.height), pxPerMm),
+    left: field.x / pxPerMm,
+    right: (stageW - (field.x + bounds.width)) / pxPerMm,
+    top: field.y / pxPerMm,
+    bottom: (stageH - (field.y + bounds.height)) / pxPerMm,
   };
 }
 

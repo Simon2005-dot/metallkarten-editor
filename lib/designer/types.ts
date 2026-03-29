@@ -106,3 +106,28 @@ export type ContextMenuState = {
   y: number;
   fieldId: string;
 } | null;
+
+export type ProductShape = 'rect' | 'circle';
+
+export type DesignerProduct = {
+  id: string;
+  name: string;
+  widthMm: number;
+  heightMm: number;
+  pxPerMm: number;
+  safeMarginMm: number;
+  shape: ProductShape;
+  hole?: {
+    x: number;
+    y: number;
+    radius: number;
+  };
+  backgrounds: Record<string, string>;
+  frameStyles: Record<
+    string,
+    { border: string; gridLine: string; safeArea: string }
+  >;
+  cardLabels: Record<string, string>;
+  frontDefaultFields: Field[];
+  backDefaultFields: Field[];
+};

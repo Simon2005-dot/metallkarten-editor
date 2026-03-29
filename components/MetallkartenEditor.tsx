@@ -5,6 +5,7 @@ import qrcode from 'qrcode-generator';
 import JSZip from 'jszip';
 import { SelectionBadge } from '@/components/designer/SelectionBadge';
 import { Panel } from '@/components/designer/Panel';
+import { nfcChipProduct } from '@/lib/designer/products/nfc-chip';
 
 import type {
   FontFamilyKey,
@@ -60,15 +61,10 @@ import {
   duplicateField,
 } from '@/lib/designer/helpers';
 
-const product = metalCardProduct;
-
-const CARD_WIDTH = product.widthMm;
-const CARD_HEIGHT = product.heightMm;
-const PX_PER_MM = product.pxPerMm;
-const STAGE_W = Math.round(CARD_WIDTH * PX_PER_MM);
-const STAGE_H = Math.round(CARD_HEIGHT * PX_PER_MM);
-const SAFE_MARGIN = product.safeMarginMm * PX_PER_MM;
-
+const PRODUCTS = {
+  metal: metalCardProduct,
+  chip: nfcChipProduct,
+};
 
 function getLaserColor(cardFinish: CardFinishKey, side: Side) {
   if (cardFinish === 'silver') {
@@ -125,7 +121,10 @@ function cloneFields(fields: Field[]): Field[] {
   });
 }
 
-function createNewCardDesign(index = 1, productConfig = metalCardProduct): CardDesign {
+function createNewCardDesign(
+  index = 1,
+  productConfig: typeof metalCardProduct | typeof nfcChipProduct,
+): CardDesign {
   return {
     id: buildUniqueId('card'),
     name: `Karte ${index}`,
@@ -309,29 +308,38 @@ function exportSideSvg(
   includeGuide: boolean,
   meta: { orderNumber: string; side: Side; cardName: string },
   outputMode: OutputMode,
+  dimensions: {
+    cardWidth: number;
+    cardHeight: number;
+    stageW: number;
+    stageH: number;
+    safeMargin: number;
+  },
 ) {
+  const { cardWidth, cardHeight, stageW, stageH, safeMargin } = dimensions;
+
   const content = fields
     .map((field) => {
       if (field.type === 'multiline') return textToSvg(field);
-if (field.type === 'qr') return qrSvgGroup(field, outputMode);
-if (field.type === 'logo') return logoToSvg(field, outputMode);
+      if (field.type === 'qr') return qrSvgGroup(field, outputMode);
+      if (field.type === 'logo') return logoToSvg(field, outputMode);
       return '';
     })
     .join('\n');
 
   const guide = includeGuide
     ? `
-      <rect x="1" y="1" width="${STAGE_W - 2}" height="${STAGE_H - 2}" fill="none" stroke="#ff00aa" stroke-width="1" />
-      <rect x="${SAFE_MARGIN}" y="${SAFE_MARGIN}" width="${STAGE_W - SAFE_MARGIN * 2}" height="${STAGE_H - SAFE_MARGIN * 2}" fill="none" stroke="#ff00aa" stroke-dasharray="6 4" stroke-width="1" />
-      <line x1="${STAGE_W / 2}" y1="0" x2="${STAGE_W / 2}" y2="${STAGE_H}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
-      <line x1="0" y1="${STAGE_H / 2}" x2="${STAGE_W}" y2="${STAGE_H / 2}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
+      <rect x="1" y="1" width="${stageW - 2}" height="${stageH - 2}" fill="none" stroke="#ff00aa" stroke-width="1" />
+      <rect x="${safeMargin}" y="${safeMargin}" width="${stageW - safeMargin * 2}" height="${stageH - safeMargin * 2}" fill="none" stroke="#ff00aa" stroke-dasharray="6 4" stroke-width="1" />
+      <line x1="${stageW / 2}" y1="0" x2="${stageW / 2}" y2="${stageH}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
+      <line x1="0" y1="${stageH / 2}" x2="${stageW}" y2="${stageH / 2}" stroke="#00a3ff" stroke-dasharray="6 4" stroke-width="1" />
     `
     : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="${CARD_WIDTH}mm" height="${CARD_HEIGHT}mm"
-     viewBox="0 0 ${STAGE_W} ${STAGE_H}">
+     width="${cardWidth}mm" height="${cardHeight}mm"
+     viewBox="0 0 ${stageW} ${stageH}">
   <title>${escapeXml(meta.cardName)} - ${escapeXml(meta.side)}</title>
   <desc>
     Bestellnummer: ${escapeXml(meta.orderNumber)}
@@ -981,7 +989,9 @@ const transparentPreviewSrc = previewCanvas.toDataURL('image/png');
 };
 }
 
-function createNfcField(productConfig = metalCardProduct): LogoField {
+function createNfcField(
+  productConfig: typeof metalCardProduct | typeof nfcChipProduct,
+): LogoField {
   const stageW = Math.round(productConfig.widthMm * productConfig.pxPerMm);
   const stageH = Math.round(productConfig.heightMm * productConfig.pxPerMm);
 
@@ -1006,7 +1016,17 @@ function createNfcField(productConfig = metalCardProduct): LogoField {
 }
 
 export default function MetallkartenEditor() {
-  const initialCard = useMemo(() => createNewCardDesign(1, product), []);
+  const [productKey, setProductKey] = useState<'metal' | 'chip'>('metal');
+  const product = PRODUCTS[productKey];
+
+  const CARD_WIDTH = product.widthMm;
+  const CARD_HEIGHT = product.heightMm;
+  const PX_PER_MM = product.pxPerMm;
+  const STAGE_W = Math.round(CARD_WIDTH * PX_PER_MM);
+  const STAGE_H = Math.round(CARD_HEIGHT * PX_PER_MM);
+  const SAFE_MARGIN = product.safeMarginMm * PX_PER_MM;
+
+  const initialCard = useMemo(() => createNewCardDesign(1, product), [product]);
   const [cards, setCards] = useState<CardDesign[]>([initialCard]);
   const [activeCardId, setActiveCardId] = useState<string>(initialCard.id);
   const [side, setSide] = useState<Side>('front');
@@ -1028,6 +1048,17 @@ export default function MetallkartenEditor() {
   const [measuredFieldBounds, setMeasuredFieldBounds] = useState<
     Record<string, { width: number; height: number }>
   >({});
+
+  useEffect(() => {
+  const newCard = createNewCardDesign(1, product);
+  setCards([newCard]);
+  setActiveCardId(newCard.id);
+  setSelectedId('');
+  setSide('front');
+  setGuideLines([]);
+  setEditingTextId(null);
+  setContextMenu(null);
+}, [product]);
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1674,6 +1705,13 @@ const frontSvg = exportSideSvg(
     cardName: card.name,
   },
   outputMode,
+  {
+    cardWidth: CARD_WIDTH,
+    cardHeight: CARD_HEIGHT,
+    stageW: STAGE_W,
+    stageH: STAGE_H,
+    safeMargin: SAFE_MARGIN,
+  },
 );
 
 const backSvg = exportSideSvg(
@@ -1685,6 +1723,13 @@ const backSvg = exportSideSvg(
     cardName: card.name,
   },
   outputMode,
+  {
+    cardWidth: CARD_WIDTH,
+    cardHeight: CARD_HEIGHT,
+    stageW: STAGE_W,
+    stageH: STAGE_H,
+    safeMargin: SAFE_MARGIN,
+  },
 );
         if (
   outputMode === 'laser' &&
@@ -1836,7 +1881,23 @@ const placeholderFill =
               />
             </div>
           </Panel>
+            <Panel title="Produkt wählen">
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+    <button
+      onClick={() => setProductKey('metal')}
+      style={productKey === 'metal' ? activeTabStyle : tabStyle}
+    >
+      Metallkarte
+    </button>
 
+    <button
+      onClick={() => setProductKey('chip')}
+      style={productKey === 'chip' ? activeTabStyle : tabStyle}
+    >
+      NFC Chip
+    </button>
+  </div>
+</Panel>
           <Panel title="Karten" subtitle="Name und Kartenfarbe direkt in der Liste bearbeiten">
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={addNewCard} style={{ ...buttonStyle, flex: 1 }}>
