@@ -1,4 +1,4 @@
-import type { Field, DesignerProduct } from '@/lib/designer/types';
+import type { DesignerProduct, Field } from '@/lib/designer/types';
 import {
   DEFAULT_TEXT_COLOR,
   DEFAULT_FONT_FAMILY,
@@ -6,8 +6,8 @@ import {
 } from '@/lib/designer/constants';
 
 const widthMm = 85.6;
-const heightMm = 53.98;
-const pxPerMm = 7;
+const heightMm = 54;
+const pxPerMm = 12;
 
 const stageW = Math.round(widthMm * pxPerMm);
 const stageH = Math.round(heightMm * pxPerMm);
@@ -18,9 +18,9 @@ const frontDefaultFields: Field[] = [
     type: 'multiline',
     label: 'Name',
     text: 'Max Mustermann',
-    x: 20,
-    y: 20,
-    fontSize: 24,
+    x: 80,
+    y: 120,
+    fontSize: 32,
     fontWeight: 700,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
@@ -31,9 +31,9 @@ const frontDefaultFields: Field[] = [
     type: 'multiline',
     label: 'Position',
     text: 'Geschäftsführer',
-    x: 20,
-    y: 54,
-    fontSize: 14,
+    x: 80,
+    y: 170,
+    fontSize: 18,
     fontWeight: 500,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
@@ -44,9 +44,9 @@ const frontDefaultFields: Field[] = [
     type: 'multiline',
     label: 'Firma',
     text: 'Musterfirma GmbH',
-    x: 20,
-    y: 80,
-    fontSize: 16,
+    x: 80,
+    y: 220,
+    fontSize: 22,
     fontWeight: 600,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
@@ -57,9 +57,9 @@ const frontDefaultFields: Field[] = [
     type: 'multiline',
     label: 'Kontakt',
     text: '+49 170 0000000\nmax@firma.de\nwww.firma.de',
-    x: 20,
-    y: 114,
-    fontSize: 12,
+    x: 80,
+    y: 290,
+    fontSize: 16,
     fontWeight: 400,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
@@ -70,9 +70,9 @@ const frontDefaultFields: Field[] = [
     type: 'qr',
     label: 'QR Platzhalter',
     text: '',
-    x: stageW - 120,
-    y: stageH - 120,
-    size: 90,
+    x: stageW - 180,
+    y: stageH - 180,
+    size: 120,
     color: '#000000',
     backgroundColor: '#ffffff',
   },
@@ -84,9 +84,9 @@ const backDefaultFields: Field[] = [
     type: 'multiline',
     label: 'Rückseite Titel',
     text: 'Digitale Visitenkarte',
-    x: 28,
-    y: 36,
-    fontSize: 22,
+    x: 80,
+    y: 110,
+    fontSize: 28,
     fontWeight: 700,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
@@ -97,9 +97,9 @@ const backDefaultFields: Field[] = [
     type: 'multiline',
     label: 'Rückseite Text',
     text: 'Scanne den QR-Code\nund speichere den Kontakt direkt.',
-    x: 28,
-    y: 82,
-    fontSize: 14,
+    x: 80,
+    y: 180,
+    fontSize: 18,
     fontWeight: 400,
     align: 'left',
     color: DEFAULT_TEXT_COLOR,
@@ -110,9 +110,9 @@ const backDefaultFields: Field[] = [
     type: 'qr',
     label: 'QR Platzhalter Rückseite',
     text: '',
-    x: stageW - 150,
-    y: 40,
-    size: 110,
+    x: stageW - 220,
+    y: 90,
+    size: 150,
     color: '#000000',
     backgroundColor: '#ffffff',
   },
@@ -123,8 +123,8 @@ const backDefaultFields: Field[] = [
     src: NFC_ICON_SRC,
     originalSrc: NFC_ICON_SRC,
     exportSrc: NFC_ICON_SRC,
-    x: stageW - 80,
-    y: stageH - 70,
+    x: stageW - 140,
+    y: stageH - 90,
     width: 60,
     height: 56,
     filename: 'nfc-tap-here.png',
@@ -136,9 +136,9 @@ const backDefaultFields: Field[] = [
 export const metalCardProduct: DesignerProduct = {
   id: 'metal-card',
   name: 'Metallkarte',
-  widthMm: 85.6,
-  heightMm: 54,
-  pxPerMm: 12,
+  widthMm,
+  heightMm,
+  pxPerMm,
   safeMarginMm: 3,
   shape: 'rect',
 
@@ -146,6 +146,30 @@ export const metalCardProduct: DesignerProduct = {
     black: '/backgrounds/metal-black.png',
     silver: '/backgrounds/metal-silver.png',
     gold: '/backgrounds/metal-gold.png',
+  },
+
+  preview: {
+    black: {
+      fallbackColor: '#1f2937',
+      backgroundImage: '/backgrounds/metal-black.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
+    silver: {
+      fallbackColor: '#d1d5db',
+      backgroundImage: '/backgrounds/metal-silver.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
+    gold: {
+      fallbackColor: '#d4af37',
+      backgroundImage: '/backgrounds/metal-gold.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
   },
 
   frameStyles: {

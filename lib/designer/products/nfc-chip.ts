@@ -1,4 +1,9 @@
 import type { DesignerProduct, TextField, QrField } from '@/lib/designer/types';
+import { DEFAULT_FONT_FAMILY, DEFAULT_TEXT_COLOR } from '@/lib/designer/constants';
+
+const widthMm = 23;
+const heightMm = 56.77;
+const pxPerMm = 8;
 
 const frontDefaultFields: Array<TextField | QrField> = [
   {
@@ -11,8 +16,8 @@ const frontDefaultFields: Array<TextField | QrField> = [
     fontSize: 14,
     fontWeight: 700,
     align: 'center',
-    color: '#000000',
-    fontFamily: 'arial',
+    color: DEFAULT_TEXT_COLOR,
+    fontFamily: DEFAULT_FONT_FAMILY,
   },
 ];
 
@@ -21,11 +26,11 @@ const backDefaultFields: Array<TextField | QrField> = [];
 export const nfcChipProduct: DesignerProduct = {
   id: 'nfc-chip',
   name: 'NFC Einkaufswagenchip',
-  widthMm: 23,
-  heightMm: 56.77,
-  pxPerMm: 8,
+  widthMm,
+  heightMm,
+  pxPerMm,
   safeMarginMm: 1.5,
-  shape: 'rect',
+  shape: 'custom',
 
   hole: {
     x: 11.5,
@@ -37,12 +42,9 @@ export const nfcChipProduct: DesignerProduct = {
     const w = stageW;
     const h = stageH;
     const centerX = w / 2;
-
     const topRadius = w / 2;
     const shoulderY = topRadius + 22;
-
     const bottomRadius = w * 0.35;
-
     const outerLeft = 0;
     const outerRight = w;
 
@@ -80,6 +82,30 @@ export const nfcChipProduct: DesignerProduct = {
     black: '/products/nfc-chip/black.png',
     silver: '/products/nfc-chip/silver.png',
     gold: '/products/nfc-chip/gold.png',
+  },
+
+  preview: {
+    black: {
+      fallbackColor: '#1f2937',
+      backgroundImage: '/products/nfc-chip/black.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
+    silver: {
+      fallbackColor: '#d1d5db',
+      backgroundImage: '/products/nfc-chip/silver.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
+    gold: {
+      fallbackColor: '#d4af37',
+      backgroundImage: '/products/nfc-chip/gold.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
   },
 
   frameStyles: {

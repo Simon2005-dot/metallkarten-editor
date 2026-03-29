@@ -107,7 +107,27 @@ export type ContextMenuState = {
   fieldId: string;
 } | null;
 
-export type ProductShape = 'rect' | 'circle';
+export type ProductShape = 'rect' | 'custom';
+
+export type ProductHole = {
+  x: number;
+  y: number;
+  radius: number;
+};
+
+export type ProductFrameStyle = {
+  border: string;
+  gridLine: string;
+  safeArea: string;
+};
+
+export type ProductPreviewConfig = {
+  fallbackColor: string;
+  backgroundImage?: string;
+  backgroundSize?: string;
+  backgroundPosition?: string;
+  backgroundRepeat?: string;
+};
 
 export type DesignerProduct = {
   id: string;
@@ -115,20 +135,19 @@ export type DesignerProduct = {
   widthMm: number;
   heightMm: number;
   pxPerMm: number;
+
   safeMarginMm: number;
+
   shape: ProductShape;
-  hole?: {
-    x: number;
-    y: number;
-    radius: number;
-  };
   clipPathSvg?: (stageW: number, stageH: number) => string;
+  hole?: ProductHole;
+
   backgrounds: Record<string, string>;
-  frameStyles: Record<
-    string,
-    { border: string; gridLine: string; safeArea: string }
-  >;
+  frameStyles: Record<string, ProductFrameStyle>;
   cardLabels: Record<string, string>;
+
+  preview: Record<string, ProductPreviewConfig>;
+
   frontDefaultFields: Field[];
   backDefaultFields: Field[];
 };

@@ -24,6 +24,7 @@ import type {
   CardDesign,
   VectorTraceResult,
   ContextMenuState,
+  DesignerProduct,
 } from '@/lib/designer/types';
 
 import {
@@ -61,10 +62,11 @@ import {
   duplicateField,
 } from '@/lib/designer/helpers';
 
-const PRODUCTS = {
+const PRODUCTS: Record<'metal' | 'chip', DesignerProduct> = {
   metal: metalCardProduct,
   chip: nfcChipProduct,
 };
+
 
 function getLaserColor(cardFinish: CardFinishKey, side: Side) {
   if (cardFinish === 'silver') {
@@ -1082,13 +1084,14 @@ const selectedDistances = selected
   : null;
 
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
-  const canExport = cleanOrderNumber.length >= 4;
- const previewTextColor = getLaserColor(activeCard.cardFinish, side);
-  const currentBackground = product.backgrounds[activeCard.cardFinish];
-  const frameStyle = product.frameStyles[activeCard.cardFinish];
-  const shapePath = product.clipPathSvg?.(STAGE_W, STAGE_H) ?? '';
-  const clipId = `product-clip-${productKey}`;
-  const holePx = product.hole
+const canExport = cleanOrderNumber.length >= 4;
+const previewTextColor = getLaserColor(activeCard.cardFinish, side);
+const currentBackground = product.backgrounds[activeCard.cardFinish];
+const currentPreview = product.preview[activeCard.cardFinish];
+const frameStyle = product.frameStyles[activeCard.cardFinish];
+const shapePath = product.clipPathSvg?.(STAGE_W, STAGE_H) ?? '';
+const clipId = `product-clip-${productKey}`;
+const holePx = product.hole
   ? {
       x: mmToPx(product.hole.x, PX_PER_MM),
       y: mmToPx(product.hole.y, PX_PER_MM),
@@ -2292,31 +2295,32 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
           </div>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => {
-                setSide('front');
-                setSelectedId('');
-                setGuideLines([]);
-                setEditingTextId(null);
-                setContextMenu(null);
-              }}
-              style={side === 'front' ? activeTabStyle : tabStyle}
-            >
-              Vorderseite bearbeiten
-            </button>
-            <button
-              onClick={() => {
-                setSide('back');
-                setSelectedId('');
-                setGuideLines([]);
-                setEditingTextId(null);
-                setContextMenu(null);
-              }}
-              style={side === 'back' ? activeTabStyle : tabStyle}
-            >
-              Rückseite bearbeiten
-            </button>
-          </div>
+  <button
+    onClick={() => {
+      setSide('front');
+      setSelectedId('');
+      setGuideLines([]);
+      setEditingTextId(null);
+      setContextMenu(null);
+    }}
+    style={side === 'front' ? activeTabStyle : tabStyle}
+  >
+    Vorderseite bearbeiten
+  </button>
+
+  <button
+    onClick={() => {
+      setSide('back');
+      setSelectedId('');
+      setGuideLines([]);
+      setEditingTextId(null);
+      setContextMenu(null);
+    }}
+    style={side === 'back' ? activeTabStyle : tabStyle}
+  >
+    Rückseite bearbeiten
+  </button>
+</div>
 
           <div
             style={{
@@ -2336,7 +2340,7 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
                 padding: 24,
               }}
             >
-              <div
+  <div
   ref={stageRef}
   onMouseMove={onMouseMove}
   onMouseUp={clearInteractionState}
@@ -2354,12 +2358,7 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
   }}
 >
   {shapePath ? (
-    <svg
-      width={0}
-      height={0}
-      style={{ position: 'absolute' }}
-      aria-hidden="true"
-    >
+    <svg width={0} height={0} style={{ position: 'absolute' }} aria-hidden="true">
       <defs>
         <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
           <path d={shapePath} fillRule="evenodd" />
@@ -2377,377 +2376,417 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
       overflow: 'hidden',
       clipPath: shapePath ? `url(#${clipId})` : undefined,
       WebkitClipPath: shapePath ? `url(#${clipId})` : undefined,
-      backgroundImage: showGrid
-        ? `linear-gradient(to right, ${frameStyle.gridLine} 1px, transparent 1px), linear-gradient(to bottom, ${frameStyle.gridLine} 1px, transparent 1px), url(${currentBackground})`
-        : `url(${currentBackground})`,
-      backgroundSize: showGrid ? '20px 20px, 20px 20px, cover' : 'cover',
-      backgroundPosition: showGrid ? '0 0, 0 0, center' : 'center',
-      backgroundRepeat: 'repeat, repeat, no-repeat',
+      backgroundColor: currentPreview?.fallbackColor ?? '#d1d5db',
+      backgroundImage: currentPreview?.backgroundImage
+        ? `url(${currentPreview.backgroundImage})`
+        : currentBackground
+        ? `url(${currentBackground})`
+        : undefined,
+      backgroundSize: currentPreview?.backgroundSize ?? 'cover',
+      backgroundPosition: currentPreview?.backgroundPosition ?? 'center',
+      backgroundRepeat: currentPreview?.backgroundRepeat ?? 'no-repeat',
       boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
     }}
-  ></div>
-                {showSafeArea ? (
-                  <div
-                    style={{
-                      pointerEvents: 'none',
-                      position: 'absolute',
-                      left: SAFE_MARGIN,
-                      top: SAFE_MARGIN,
-                      width: STAGE_W - SAFE_MARGIN * 2,
-                      height: STAGE_H - SAFE_MARGIN * 2,
-                      border: `1px dashed ${frameStyle.safeArea}`,
-                    }}
-                  />
-                ) : null}
-                
-                {guideLines.map((line, index) =>
-                  line.type === 'vertical' ? (
-                    <div
-                      key={`guide-v-${index}`}
-                      style={{
-                        pointerEvents: 'none',
-                        position: 'absolute',
-                        left: line.x,
-                        top: 0,
-                        width: 1,
-                        height: STAGE_H,
-                        background: '#22c55e',
-                        boxShadow: '0 0 0 1px rgba(34,197,94,0.18)',
-                        zIndex: 50,
-                      }}
-                    />
-                  ) : (
-                    <div
-                      key={`guide-h-${index}`}
-                      style={{
-                        pointerEvents: 'none',
-                        position: 'absolute',
-                        left: 0,
-                        top: line.y,
-                        width: STAGE_W,
-                        height: 1,
-                        background: '#22c55e',
-                        boxShadow: '0 0 0 1px rgba(34,197,94,0.18)',
-                        zIndex: 50,
-                      }}
-                    />
-                  ),
-                )}
+  >
+    {showGrid ? (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `
+            linear-gradient(to right, ${frameStyle.gridLine} 1px, transparent 1px),
+            linear-gradient(to bottom, ${frameStyle.gridLine} 1px, transparent 1px)
+          `,
+          backgroundSize: '20px 20px',
+          pointerEvents: 'none',
+          zIndex: 1,
+        }}
+      />
+    ) : null}
 
-                {visibleFields.map((field) => {
-                  const isSelected = field.id === selectedId;
-                  const bounds = fieldBounds(field);
+    {holePx ? (
+      <div
+        style={{
+          position: 'absolute',
+          left: holePx.x - holePx.radius,
+          top: holePx.y - holePx.radius,
+          width: holePx.radius * 2,
+          height: holePx.radius * 2,
+          borderRadius: '50%',
+          background: '#f3f4f6',
+          border: `1px solid ${frameStyle.border}`,
+          pointerEvents: 'none',
+          zIndex: 3,
+        }}
+      />
+    ) : null}
+  </div>
 
-                  if (field.type === 'multiline') {
-                    const lines = String(field.text || '').split('\n');
-                    const fontFamily = FONT_OPTIONS[field.fontFamily] || FONT_OPTIONS[DEFAULT_FONT_FAMILY];
-                    const isEditing = editingTextId === field.id;
+  {showSafeArea ? (
+    <div
+      style={{
+        pointerEvents: 'none',
+        position: 'absolute',
+        left: SAFE_MARGIN,
+        top: SAFE_MARGIN,
+        width: STAGE_W - SAFE_MARGIN * 2,
+        height: STAGE_H - SAFE_MARGIN * 2,
+        border: `1px dashed ${frameStyle.safeArea}`,
+        zIndex: 10,
+      }}
+    />
+  ) : null}
 
-                    return (
-  <div
-    key={field.id}
-    ref={(el) => {
-      fieldRefs.current[field.id] = el;
-    }}
-    onClick={(e) => {
-      e.stopPropagation();
-      setSelectedId(field.id);
-      setContextMenu(null);
-    }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSelectedId(field.id);
-                          setEditingTextId(null);
-                          setContextMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            fieldId: field.id,
-                          });
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(field.id);
-                          setEditingTextId(field.id);
-                          setContextMenu(null);
-                        }}
-                        onMouseDown={(e) => {
-                          if (isEditing) return;
-                          onMouseDown(e, field);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          cursor: isEditing ? 'text' : 'move',
-                          whiteSpace: 'pre',
-                          outline: isSelected ? '2px solid #4f46e5' : 'none',
-                          outlineOffset: 2,
-                          left: field.x,
-                          top: field.y,
-                          minWidth: 20,
-                        }}
-                      >
-                        {isEditing ? (
-                          <textarea
-                            autoFocus
-                            value={field.text}
-                            rows={Math.max(String(field.text || '').split('\n').length, 1)}
-                            onChange={(e) => updateField(field.id, { text: e.target.value })}
-                            onBlur={() => setEditingTextId(null)}
-                            onClick={(e) => e.stopPropagation()}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Escape') {
-                                setEditingTextId(null);
-                              }
-                            }}
-                            style={{
-                              width: Math.max(bounds.width + 24, 140),
-                              minHeight: bounds.height + 18,
-                              resize: 'both',
-                              padding: '6px 8px',
-                              borderRadius: 8,
-                              border: '2px solid #4f46e5',
-                              background: 'rgba(255,255,255,0.96)',
-                              color: '#111827',
-                              fontSize: field.fontSize,
-                              fontWeight: field.fontWeight,
-                              lineHeight: 1.35,
-                              textAlign: field.align,
-                              fontFamily,
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-  fontSize: field.fontSize,
-  color:
-    outputMode === 'uv'
-      ? field.color ?? '#000000'
-      : previewTextColor,
-  fontWeight: field.fontWeight,
-  lineHeight: 1.35,
-  textAlign: field.align,
-  fontFamily,
-  textShadow:
-    outputMode === 'uv'
-      ? 'none'
-      : '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
-}}
-                          >
-                            {lines.map((line, index) => (
-                              <div key={index}>{line}</div>
-                            ))}
-                          </div>
-                        )}
-                        {isSelected && !isEditing ? (
-                          <SelectionBadge width={bounds.width} height={bounds.height} />
-                          ) : null}
-                      </div>
-                    );
-                  }
+  {guideLines.map((line, index) =>
+    line.type === 'vertical' ? (
+      <div
+        key={`guide-v-${index}`}
+        style={{
+          pointerEvents: 'none',
+          position: 'absolute',
+          left: line.x,
+          top: 0,
+          width: 1,
+          height: STAGE_H,
+          background: '#22c55e',
+          boxShadow: '0 0 0 1px rgba(34,197,94,0.18)',
+          zIndex: 50,
+        }}
+      />
+    ) : (
+      <div
+        key={`guide-h-${index}`}
+        style={{
+          pointerEvents: 'none',
+          position: 'absolute',
+          left: 0,
+          top: line.y,
+          width: STAGE_W,
+          height: 1,
+          background: '#22c55e',
+          boxShadow: '0 0 0 1px rgba(34,197,94,0.18)',
+          zIndex: 50,
+        }}
+      />
+    ),
+  )}
 
-                  if (field.type === 'qr') {
-                    return (
-                      <div
-  key={field.id}
-  ref={(el) => {
-    fieldRefs.current[field.id] = el;
-  }}
-                        onMouseDown={(e) => onMouseDown(e, field)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(field.id);
-                          setEditingTextId(null);
-                          setContextMenu(null);
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSelectedId(field.id);
-                          setEditingTextId(null);
-                          setContextMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            fieldId: field.id,
-                          });
-                        }}
-                        style={{
-                          position: 'absolute',
-                          cursor: 'move',
-                          background: 'transparent',
-                          outline: isSelected ? '2px solid #4f46e5' : 'none',
-                          outlineOffset: 2,
-                          left: field.x,
-                          top: field.y,
-                          width: field.size,
-                          height: field.size,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {renderQrPreview(field)}
-                        {isSelected ? (
-                          <>
-                            <SelectionBadge width={field.size} height={field.size} />
-                            <div
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                const pos = pointerPos(e as React.MouseEvent<HTMLDivElement>);
-                                setResizing({
-                                  id: field.id,
-                                  startX: pos.x,
-                                  startY: pos.y,
-                                  startWidth: field.size,
-                                  startHeight: field.size,
-                                });
-                              }}
-                              style={{
-                                position: 'absolute',
-                                right: -6,
-                                bottom: -6,
-                                width: 16,
-                                height: 16,
-                                borderRadius: 999,
-                                background: '#4f46e5',
-                                border: '2px solid white',
-                                cursor: 'nwse-resize',
-                                boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-                              }}
-                            />
-                          </>
-                        ) : null}
-                      </div>
-                    );
-                  }
+  {visibleFields.map((field) => {
+    const isSelected = field.id === selectedId;
+    const bounds = fieldBounds(field);
 
-                  if (field.type === 'logo') {
-                    return (
-                     <div
-  key={field.id}
-  ref={(el) => {
-    fieldRefs.current[field.id] = el;
-  }}
- 
-                        onMouseDown={(e) => onMouseDown(e, field)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(field.id);
-                          setEditingTextId(null);
-                          setContextMenu(null);
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSelectedId(field.id);
-                          setEditingTextId(null);
-                          setContextMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            fieldId: field.id,
-                          });
-                        }}
-                        style={{
-                          position: 'absolute',
-                          cursor: 'move',
-                          overflow: 'hidden',
-                          outline: isSelected ? '2px solid #4f46e5' : 'none',
-                          outlineOffset: 2,
-                          left: field.x,
-                          top: field.y,
-                          width: field.width,
-                          height: field.height,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                       {outputMode === 'uv' ? (
-  <img
-  src={field.exportSrc || field.originalSrc || field.src}
-    alt={field.label}
-    draggable={false}
-    style={{
-      width: '100%',
-      height: '100%',
-      objectFit: 'contain',
-      opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
-      pointerEvents: 'none',
-      userSelect: 'none',
-    }}
-  />
-) : (
-  <div
-    style={{
-      width: '100%',
-      height: '100%',
-      WebkitMaskImage: `url(${getDisplaySrc(field)})`,
-      WebkitMaskRepeat: 'no-repeat',
-      WebkitMaskSize: 'contain',
-      WebkitMaskPosition: 'center',
-      maskImage: `url(${getDisplaySrc(field)})`,
-      maskRepeat: 'no-repeat',
-      maskSize: 'contain',
-      maskPosition: 'center',
-     backgroundColor: previewTextColor,
-      opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
-    }}
-  />
-)}
-                        {field.vectorStatus === 'processing' ? (
-                          <div
-                            style={{
-                              position: 'absolute',
-                              left: 6,
-                              top: 6,
-                              fontSize: 10,
-                              background: 'rgba(17,24,39,0.85)',
-                              color: '#fff',
-                              borderRadius: 999,
-                              padding: '2px 6px',
-                            }}
-                          >
-                            Trace…
-                          </div>
-                        ) : null}
-                        {isSelected ? (
-                          <>
-                            <SelectionBadge width={field.width} height={field.height} />
-                            <div
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                const pos = pointerPos(e as React.MouseEvent<HTMLDivElement>);
-                                setResizing({
-                                  id: field.id,
-                                  startX: pos.x,
-                                  startY: pos.y,
-                                  startWidth: field.width,
-                                  startHeight: field.height,
-                                });
-                              }}
-                              style={{
-                                position: 'absolute',
-                                right: -6,
-                                bottom: -6,
-                                width: 16,
-                                height: 16,
-                                borderRadius: 999,
-                                background: '#4f46e5',
-                                border: '2px solid white',
-                                cursor: 'nwse-resize',
-                                boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-                              }}
-                            />
-                          </>
-                        ) : null}
-                      </div>
-                    );
-                  }
+    if (field.type === 'multiline') {
+      const lines = String(field.text || '').split('\n');
+      const fontFamily =
+        FONT_OPTIONS[field.fontFamily] || FONT_OPTIONS[DEFAULT_FONT_FAMILY];
+      const isEditing = editingTextId === field.id;
 
-                  return null;
-                })}
-              </div>
+      return (
+        <div
+          key={field.id}
+          ref={(el) => {
+            fieldRefs.current[field.id] = el;
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedId(field.id);
+            setContextMenu(null);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedId(field.id);
+            setEditingTextId(null);
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              fieldId: field.id,
+            });
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            setSelectedId(field.id);
+            setEditingTextId(field.id);
+            setContextMenu(null);
+          }}
+          onMouseDown={(e) => {
+            if (isEditing) return;
+            onMouseDown(e, field);
+          }}
+          style={{
+            position: 'absolute',
+            cursor: isEditing ? 'text' : 'move',
+            whiteSpace: 'pre',
+            outline: isSelected ? '2px solid #4f46e5' : 'none',
+            outlineOffset: 2,
+            left: field.x,
+            top: field.y,
+            minWidth: 20,
+            zIndex: 20,
+          }}
+        >
+          {isEditing ? (
+            <textarea
+              autoFocus
+              value={field.text}
+              rows={Math.max(String(field.text || '').split('\n').length, 1)}
+              onChange={(e) => updateField(field.id, { text: e.target.value })}
+              onBlur={() => setEditingTextId(null)}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setEditingTextId(null);
+                }
+              }}
+              style={{
+                width: Math.max(bounds.width + 24, 140),
+                minHeight: bounds.height + 18,
+                resize: 'both',
+                padding: '6px 8px',
+                borderRadius: 8,
+                border: '2px solid #4f46e5',
+                background: 'rgba(255,255,255,0.96)',
+                color: '#111827',
+                fontSize: field.fontSize,
+                fontWeight: field.fontWeight,
+                lineHeight: 1.35,
+                textAlign: field.align,
+                fontFamily,
+                boxSizing: 'border-box',
+                outline: 'none',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                fontSize: field.fontSize,
+                color: outputMode === 'uv' ? field.color ?? '#000000' : previewTextColor,
+                fontWeight: field.fontWeight,
+                lineHeight: 1.35,
+                textAlign: field.align,
+                fontFamily,
+                textShadow:
+                  outputMode === 'uv'
+                    ? 'none'
+                    : '0 1px 0 rgba(255,255,255,0.15), 0 -1px 1px rgba(0,0,0,0.45)',
+              }}
+            >
+              {lines.map((line, index) => (
+                <div key={index}>{line}</div>
+              ))}
             </div>
+          )}
+
+          {isSelected && !isEditing ? (
+            <SelectionBadge width={bounds.width} height={bounds.height} />
+          ) : null}
+        </div>
+      );
+    }
+
+    if (field.type === 'qr') {
+      return (
+        <div
+          key={field.id}
+          ref={(el) => {
+            fieldRefs.current[field.id] = el;
+          }}
+          onMouseDown={(e) => onMouseDown(e, field)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedId(field.id);
+            setEditingTextId(null);
+            setContextMenu(null);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedId(field.id);
+            setEditingTextId(null);
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              fieldId: field.id,
+            });
+          }}
+          style={{
+            position: 'absolute',
+            cursor: 'move',
+            background: 'transparent',
+            outline: isSelected ? '2px solid #4f46e5' : 'none',
+            outlineOffset: 2,
+            left: field.x,
+            top: field.y,
+            width: field.size,
+            height: field.size,
+            overflow: 'hidden',
+            zIndex: 20,
+          }}
+        >
+          {renderQrPreview(field)}
+          {isSelected ? (
+            <>
+              <SelectionBadge width={field.size} height={field.size} />
+              <div
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  const pos = pointerPos(e as React.MouseEvent<HTMLDivElement>);
+                  setResizing({
+                    id: field.id,
+                    startX: pos.x,
+                    startY: pos.y,
+                    startWidth: field.size,
+                    startHeight: field.size,
+                  });
+                }}
+                style={{
+                  position: 'absolute',
+                  right: -6,
+                  bottom: -6,
+                  width: 16,
+                  height: 16,
+                  borderRadius: 999,
+                  background: '#4f46e5',
+                  border: '2px solid white',
+                  cursor: 'nwse-resize',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                }}
+              />
+            </>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (field.type === 'logo') {
+      return (
+        <div
+          key={field.id}
+          ref={(el) => {
+            fieldRefs.current[field.id] = el;
+          }}
+          onMouseDown={(e) => onMouseDown(e, field)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedId(field.id);
+            setEditingTextId(null);
+            setContextMenu(null);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedId(field.id);
+            setEditingTextId(null);
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              fieldId: field.id,
+            });
+          }}
+          style={{
+            position: 'absolute',
+            cursor: 'move',
+            overflow: 'hidden',
+            outline: isSelected ? '2px solid #4f46e5' : 'none',
+            outlineOffset: 2,
+            left: field.x,
+            top: field.y,
+            width: field.width,
+            height: field.height,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20,
+          }}
+        >
+          {outputMode === 'uv' ? (
+            <img
+              src={field.exportSrc || field.originalSrc || field.src}
+              alt={field.label}
+              draggable={false}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
+                pointerEvents: 'none',
+                userSelect: 'none',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                WebkitMaskImage: `url(${getDisplaySrc(field)})`,
+                WebkitMaskRepeat: 'no-repeat',
+                WebkitMaskSize: 'contain',
+                WebkitMaskPosition: 'center',
+                maskImage: `url(${getDisplaySrc(field)})`,
+                maskRepeat: 'no-repeat',
+                maskSize: 'contain',
+                maskPosition: 'center',
+                backgroundColor: previewTextColor,
+                opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
+              }}
+            />
+          )}
+
+          {field.vectorStatus === 'processing' ? (
+            <div
+              style={{
+                position: 'absolute',
+                left: 6,
+                top: 6,
+                fontSize: 10,
+                background: 'rgba(17,24,39,0.85)',
+                color: '#fff',
+                borderRadius: 999,
+                padding: '2px 6px',
+              }}
+            >
+              Trace…
+            </div>
+          ) : null}
+
+          {isSelected ? (
+            <>
+              <SelectionBadge width={field.width} height={field.height} />
+              <div
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  const pos = pointerPos(e as React.MouseEvent<HTMLDivElement>);
+                  setResizing({
+                    id: field.id,
+                    startX: pos.x,
+                    startY: pos.y,
+                    startWidth: field.width,
+                    startHeight: field.height,
+                  });
+                }}
+                style={{
+                  position: 'absolute',
+                  right: -6,
+                  bottom: -6,
+                  width: 16,
+                  height: 16,
+                  borderRadius: 999,
+                  background: '#4f46e5',
+                  border: '2px solid white',
+                  cursor: 'nwse-resize',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                }}
+              />
+            </>
+          ) : null}
+        </div>
+      );
+    }
+
+    return null;
+  })}
+</div>
             {selected && selectedDistances ? (
   <div
     style={{
@@ -2816,9 +2855,12 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
         {selectedDistances.bottom.toFixed(1)} mm
       </div>
     </div>
+   </div>
+) : null}
+    </div>
   </div>
-) : null}</div>
-            <div style={{ display: 'grid', gap: 14 }}>
+
+  <div style={{ display: 'grid', gap: 14 }}>
               <Panel title={selected ? `Ausgewählt: ${selected.label}` : 'Kein Element ausgewählt'}>
                 {selected ? (
                   <div style={{ display: 'grid', gap: 10 }}>
