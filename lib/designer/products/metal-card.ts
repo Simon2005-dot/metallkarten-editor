@@ -1,6 +1,9 @@
-import type { CardFinishKey, Field } from '@/lib/designer/types';
-import { DEFAULT_TEXT_COLOR, DEFAULT_FONT_FAMILY, NFC_ICON_SRC } from '@/lib/designer/constants';
-import type { DesignerProduct } from '@/lib/designer/types';
+import type { Field, DesignerProduct } from '@/lib/designer/types';
+import {
+  DEFAULT_TEXT_COLOR,
+  DEFAULT_FONT_FAMILY,
+  NFC_ICON_SRC,
+} from '@/lib/designer/constants';
 
 const widthMm = 85.6;
 const heightMm = 53.98;
@@ -120,8 +123,8 @@ const backDefaultFields: Field[] = [
     src: NFC_ICON_SRC,
     originalSrc: NFC_ICON_SRC,
     exportSrc: NFC_ICON_SRC,
-    x: 518,
-    y: 301,
+    x: stageW - 80,
+    y: stageH - 70,
     width: 60,
     height: 56,
     filename: 'nfc-tap-here.png',
@@ -129,8 +132,6 @@ const backDefaultFields: Field[] = [
     vectorStatus: 'idle',
   },
 ];
-
-
 
 export const metalCardProduct: DesignerProduct = {
   id: 'metal-card',
@@ -140,35 +141,37 @@ export const metalCardProduct: DesignerProduct = {
   pxPerMm: 12,
   safeMarginMm: 3,
   shape: 'rect',
+
   backgrounds: {
     black: '/backgrounds/metal-black.png',
     silver: '/backgrounds/metal-silver.png',
     gold: '/backgrounds/metal-gold.png',
   },
+
   frameStyles: {
-    black: { border: '#374151', gridLine: 'rgba(255,255,255,0.06)', safeArea: '#9ca3af' },
-    silver: { border: '#9ca3af', gridLine: 'rgba(0,0,0,0.06)', safeArea: '#6b7280' },
-    gold: { border: '#a16207', gridLine: 'rgba(0,0,0,0.06)', safeArea: '#92400e' },
+    black: {
+      border: '#374151',
+      gridLine: 'rgba(255,255,255,0.06)',
+      safeArea: '#9ca3af',
+    },
+    silver: {
+      border: '#9ca3af',
+      gridLine: 'rgba(0,0,0,0.06)',
+      safeArea: '#6b7280',
+    },
+    gold: {
+      border: '#a16207',
+      gridLine: 'rgba(0,0,0,0.06)',
+      safeArea: '#92400e',
+    },
   },
+
   cardLabels: {
     black: 'Schwarz',
     silver: 'Silber',
     gold: 'Gold',
   },
-  frontDefaultFields: [
-    {
-      id: 'name',
-      type: 'multiline',
-      label: 'Name',
-      text: 'Max Mustermann',
-      x: 80,
-      y: 120,
-      fontSize: 18,
-      fontWeight: 700,
-      align: 'left',
-      color: '#000000',
-      fontFamily: 'arial',
-    },
-  ],
-  backDefaultFields: [],
+
+  frontDefaultFields,
+  backDefaultFields,
 };

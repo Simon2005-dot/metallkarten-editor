@@ -36,31 +36,25 @@ export const nfcChipProduct: DesignerProduct = {
   clipPathSvg: (stageW, stageH) => {
     const w = stageW;
     const h = stageH;
-
     const centerX = w / 2;
 
     const topRadius = w / 2;
-    const topCircleCy = topRadius;
-
     const shoulderY = topRadius + 22;
-    const sideInset = 0;
+
+    const bottomRadius = w * 0.35;
+
+    const outerLeft = 0;
+    const outerRight = w;
 
     const slotOuterWidth = w * 0.52;
     const slotInnerWidth = w * 0.34;
     const slotTopY = h * 0.56;
     const slotBottomY = h * 0.88;
-    const bottomRadius = w * 0.35;
-
-    const outerLeft = sideInset;
-    const outerRight = w - sideInset;
 
     const slotLeft = centerX - slotOuterWidth / 2;
     const slotRight = centerX + slotOuterWidth / 2;
-
     const innerSlotLeft = centerX - slotInnerWidth / 2;
     const innerSlotRight = centerX + slotInnerWidth / 2;
-
-    const bottomCenterY = h - bottomRadius;
 
     return `
       M ${outerLeft} ${shoulderY}
