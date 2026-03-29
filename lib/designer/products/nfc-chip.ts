@@ -1,8 +1,8 @@
 import type { DesignerProduct, TextField, QrField } from '@/lib/designer/types';
 import { DEFAULT_FONT_FAMILY, DEFAULT_TEXT_COLOR } from '@/lib/designer/constants';
 
-const widthMm = 23;
-const heightMm = 56.77;
+const widthMm = 56.77;
+const heightMm = 23;
 const pxPerMm = 8;
 
 const frontDefaultFields: Array<TextField | QrField> = [
