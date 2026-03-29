@@ -1,5 +1,6 @@
 import type { CardFinishKey, Field } from '@/lib/designer/types';
 import { DEFAULT_TEXT_COLOR, DEFAULT_FONT_FAMILY, NFC_ICON_SRC } from '@/lib/designer/constants';
+import type { DesignerProduct } from '@/lib/designer/types';
 
 const widthMm = 85.6;
 const heightMm = 53.98;
@@ -129,44 +130,45 @@ const backDefaultFields: Field[] = [
   },
 ];
 
-export const metalCardProduct = {
+
+
+export const metalCardProduct: DesignerProduct = {
   id: 'metal-card',
   name: 'Metallkarte',
-  widthMm,
-  heightMm,
-  pxPerMm,
+  widthMm: 85.6,
+  heightMm: 54,
+  pxPerMm: 12,
   safeMarginMm: 3,
-
+  shape: 'rect',
   backgrounds: {
-    black: '/card-backgrounds/black.png',
-    silver: '/card-backgrounds/silver.png',
-    gold: '/card-backgrounds/gold.png',
-  } satisfies Record<CardFinishKey, string>,
-
+    black: '/backgrounds/metal-black.png',
+    silver: '/backgrounds/metal-silver.png',
+    gold: '/backgrounds/metal-gold.png',
+  },
   frameStyles: {
-    black: {
-      border: '#3f3f46',
-      gridLine: 'rgba(255,255,255,0.08)',
-      safeArea: 'rgba(255,255,255,0.35)',
-    },
-    silver: {
-      border: '#9ca3af',
-      gridLine: 'rgba(0,0,0,0.08)',
-      safeArea: 'rgba(31,41,55,0.35)',
-    },
-    gold: {
-      border: '#b8860b',
-      gridLine: 'rgba(0,0,0,0.08)',
-      safeArea: 'rgba(43,30,5,0.35)',
-    },
-  } satisfies Record<CardFinishKey, { border: string; gridLine: string; safeArea: string }>,
-
+    black: { border: '#374151', gridLine: 'rgba(255,255,255,0.06)', safeArea: '#9ca3af' },
+    silver: { border: '#9ca3af', gridLine: 'rgba(0,0,0,0.06)', safeArea: '#6b7280' },
+    gold: { border: '#a16207', gridLine: 'rgba(0,0,0,0.06)', safeArea: '#92400e' },
+  },
   cardLabels: {
     black: 'Schwarz',
     silver: 'Silber',
     gold: 'Gold',
-  } satisfies Record<CardFinishKey, string>,
-
-  frontDefaultFields,
-  backDefaultFields,
+  },
+  frontDefaultFields: [
+    {
+      id: 'name',
+      type: 'multiline',
+      label: 'Name',
+      text: 'Max Mustermann',
+      x: 80,
+      y: 120,
+      fontSize: 18,
+      fontWeight: 700,
+      align: 'left',
+      color: '#000000',
+      fontFamily: 'arial',
+    },
+  ],
+  backDefaultFields: [],
 };
