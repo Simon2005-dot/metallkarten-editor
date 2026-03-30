@@ -1066,57 +1066,55 @@ function clampRectToChipSafeArea(
   let nextX = x;
   let nextY = y;
 
-  // oben / unten
+  // Oben / unten begrenzen
   nextY = clamp(nextY, area.top, area.bottom - height);
 
-  // links
+  // Links begrenzen
   nextX = Math.max(nextX, area.left);
 
-  // zuerst grob nach rechts begrenzen
-  const maxRight = area.arcCenterX + area.radius;
-  nextX = Math.min(nextX, maxRight - width);
+  // Ganz rechte absolute Grenze des Halbkreises
+  const absoluteMaxRight = area.arcCenterX + area.radius;
 
-  const rightEdge = nextX + width;
+  // Rechte Kante des Elements
+  let rightEdge = nextX + width;
 
-  // wenn Feld komplett im rechteckigen Teil ist: fertig
+  // Wenn Feld vollständig im rechteckigen Teil liegt: fertig
   if (rightEdge <= area.rightJoinX) {
     return { x: nextX, y: nextY };
   }
 
-  // sonst prüfen wir die beiden rechten Ecken gegen die rechte Rundung
-  const points = [
-    { x: nextX + width, y: nextY },
-    { x: nextX + width, y: nextY + height },
-  ];
+  // Für den runden Bereich:
+  // Prüfe obere und untere rechte Ecke des Felds
+  const rightSideYs = [nextY, nextY + height];
 
-  for (let i = 0; i < 10; i++) {
-    let inside = true;
+  let maxAllowedRight = absoluteMaxRight;
 
-    for (const p of points) {
-      if (p.x <= area.rightJoinX) continue;
+  for (const pointY of rightSideYs) {
+    const dy = pointY - area.arcCenterY;
+    const insideY = area.radius * area.radius - dy * dy;
 
-      const dx = p.x - area.arcCenterX;
-      const dy = p.y - area.arcCenterY;
-      const distSq = dx * dx + dy * dy;
-
-      if (distSq > area.radius * area.radius) {
-        inside = false;
-        break;
-      }
+    // Diese Y-Lage liegt außerhalb des Halbkreises -> Feld muss links in den rechteckigen Teil
+    if (insideY < 0) {
+      maxAllowedRight = Math.min(maxAllowedRight, area.rightJoinX);
+      continue;
     }
 
-    if (inside) break;
-    nextX -= 2;
-    if (nextX < area.left) {
-      nextX = area.left;
-      break;
-    }
-
-    points[0].x = nextX + width;
-    points[1].x = nextX + width;
+    const allowedRightAtThisY = area.arcCenterX + Math.sqrt(insideY);
+    maxAllowedRight = Math.min(maxAllowedRight, allowedRightAtThisY);
   }
 
-  return { x: nextX, y: nextY };
+  // Rechte Kante begrenzen
+  rightEdge = Math.min(rightEdge, maxAllowedRight);
+
+  nextX = rightEdge - width;
+
+  // Linke Grenze nachziehen
+  nextX = Math.max(nextX, area.left);
+
+  return {
+    x: nextX,
+    y: nextY,
+  };
 }
 
 function clampFieldToProductSafeArea(
