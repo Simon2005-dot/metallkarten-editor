@@ -1755,7 +1755,7 @@ while (
     if (editingTextId === field.id) return;
 
     const pos = pointerPos(event);
-    const bounds = fieldBounds(field);
+    const bounds = measuredFieldBounds[field.id] ?? fieldBounds(field);
 
     let x = pos.x - dragging.offsetX;
     let y = pos.y - dragging.offsetY;
@@ -1791,7 +1791,7 @@ y = clampedPos.y;
 
   const nudgeSelected = (dx: number, dy: number) => {
     if (!selected) return;
-    const bounds = fieldBounds(selected);
+    const bounds = measuredFieldBounds[selected.id] ?? fieldBounds(selected);
     const clampedPos = clampFieldToProductSafeArea(
   productKey,
   selected.x + dx,
