@@ -1018,12 +1018,12 @@ function createNfcField(
 }
 
 function getChipSafeAreaRect(stageW: number, stageH: number) {
-  const top = 30;
-  const bottom = stageH - 30;
+  const top = 22;
+  const bottom = stageH - 22;
   const left = 72;
 
-  const radius = (bottom - top) / 2;
-  const arcCenterX = stageW - 34;
+  const radius = (bottom - top) / 2 ;
+  const arcCenterX = stageW - 60;
   const arcCenterY = stageH / 2;
   const rightJoinX = arcCenterX - radius;
 
