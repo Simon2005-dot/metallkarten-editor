@@ -39,18 +39,13 @@ function buildFullImageClipPath(w: number, h: number) {
 }
 
 function buildSimpleSafeAreaPath(w: number, h: number) {
-  // Vereinfachter Sicherheitsbereich:
-  // - Startet rechts vom Loch
-  // - Läuft mittig rechteckig
-  // - Hat rechts einen runden Abschluss
+  const top = 22;
+  const bottom = h - 22;
+  const left = 48;
 
-  const top = 25;
-  const bottom = h - 25;
-  const left = 55; // rechts vom Loch
   const radius = (bottom - top) / 2;
-  const rightArcCenterX = w - 34;
+  const rightArcCenterX = w - 68;
   const rightJoinX = rightArcCenterX - radius;
-  const cy = h / 2;
 
   return `
     M ${left} ${top}
