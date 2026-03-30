@@ -44,9 +44,9 @@ function buildSimpleSafeAreaPath(w: number, h: number) {
   // - Läuft mittig rechteckig
   // - Hat rechts einen runden Abschluss
 
-  const top = 30;
-  const bottom = h - 30;
-  const left = 72; // rechts vom Loch
+  const top = 25;
+  const bottom = h - 25;
+  const left = 55; // rechts vom Loch
   const radius = (bottom - top) / 2;
   const rightArcCenterX = w - 34;
   const rightJoinX = rightArcCenterX - radius;
