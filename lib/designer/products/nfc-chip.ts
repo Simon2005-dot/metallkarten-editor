@@ -84,6 +84,30 @@ export const nfcChipProduct: DesignerProduct = {
     gold: '/products/nfc-chip/gold.png',
   },
 
+  safeAreaSvg: (stageW, stageH, inset) => {
+  const left = inset;
+  const top = inset;
+  const right = stageW - inset;
+  const bottom = stageH - inset;
+
+  const w = right - left;
+  const h = bottom - top;
+
+  const centerX = left + w / 2;
+  const topRadius = w / 2;
+  const shoulderY = top + topRadius + 22;
+  const bottomRadius = w * 0.35;
+
+  return `
+    M ${left} ${shoulderY}
+    L ${left} ${bottom - bottomRadius}
+    A ${bottomRadius} ${bottomRadius} 0 0 0 ${right} ${bottom - bottomRadius}
+    L ${right} ${shoulderY}
+    A ${topRadius} ${topRadius} 0 0 0 ${left} ${shoulderY}
+    Z
+  `;
+},
+
   preview: {
   black: {
     fallbackColor: '#f3f4f6',
@@ -135,3 +159,4 @@ export const nfcChipProduct: DesignerProduct = {
   frontDefaultFields,
   backDefaultFields,
 };
+

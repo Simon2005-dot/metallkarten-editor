@@ -2422,7 +2422,29 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
     ) : null}
   </div>
 
+
   {showSafeArea ? (
+  product.safeAreaSvg ? (
+    <svg
+      width={STAGE_W}
+      height={STAGE_H}
+      viewBox={`0 0 ${STAGE_W} ${STAGE_H}`}
+      style={{
+        pointerEvents: 'none',
+        position: 'absolute',
+        inset: 0,
+        zIndex: 10,
+      }}
+    >
+      <path
+        d={product.safeAreaSvg(STAGE_W, STAGE_H, SAFE_MARGIN)}
+        fill="none"
+        stroke={frameStyle.safeArea}
+        strokeWidth={1}
+        strokeDasharray="6 4"
+      />
+    </svg>
+  ) : (
     <div
       style={{
         pointerEvents: 'none',
@@ -2435,7 +2457,9 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
         zIndex: 10,
       }}
     />
-  ) : null}
+  )
+) : null}
+
 
   {guideLines.map((line, index) =>
     line.type === 'vertical' ? (

@@ -140,6 +140,7 @@ export type DesignerProduct = {
 
   shape: ProductShape;
   clipPathSvg?: (stageW: number, stageH: number) => string;
+  safeAreaSvg?: (stageW: number, stageH: number, inset: number) => string;
   hole?: ProductHole;
 
   backgrounds: Record<string, string>;
