@@ -7,7 +7,7 @@ import {
 
 const widthMm = 85.6;
 const heightMm = 54;
-const pxPerMm = 12;
+const pxPerMm = 8;
 
 const stageW = Math.round(widthMm * pxPerMm);
 const stageH = Math.round(heightMm * pxPerMm);
