@@ -62,6 +62,8 @@ import {
   duplicateField,
 } from '@/lib/designer/helpers';
 
+const ENABLE_CHIP = false;
+
 const PRODUCTS: Record<'metal' | 'chip', DesignerProduct> = {
   metal: metalCardProduct,
   chip: nfcChipProduct,
@@ -2089,8 +2091,14 @@ const placeholderFill =
               />
             </div>
           </Panel>
-            <Panel title="Produkt wählen">
-  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+           <Panel title="Produkt wählen">
+  <div
+    style={{
+      display: 'grid',
+      gridTemplateColumns: ENABLE_CHIP ? '1fr 1fr' : '1fr',
+      gap: 8,
+    }}
+  >
     <button
       onClick={() => setProductKey('metal')}
       style={productKey === 'metal' ? activeTabStyle : tabStyle}
@@ -2098,12 +2106,14 @@ const placeholderFill =
       Metallkarte
     </button>
 
-    <button
-      onClick={() => setProductKey('chip')}
-      style={productKey === 'chip' ? activeTabStyle : tabStyle}
-    >
-      NFC Chip
-    </button>
+    {ENABLE_CHIP && (
+      <button
+        onClick={() => setProductKey('chip')}
+        style={productKey === 'chip' ? activeTabStyle : tabStyle}
+      >
+        NFC Chip
+      </button>
+    )}
   </div>
 </Panel>
           <Panel title="Karten" subtitle="Name und Kartenfarbe direkt in der Liste bearbeiten">
