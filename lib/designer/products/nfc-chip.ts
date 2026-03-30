@@ -3,7 +3,10 @@ import { DEFAULT_FONT_FAMILY, DEFAULT_TEXT_COLOR } from '@/lib/designer/constant
 
 const widthMm = 56.77;
 const heightMm = 23;
-const pxPerMm = 8;
+const pxPerMm = 12;
+
+const stageW = Math.round(widthMm * pxPerMm);
+const stageH = Math.round(heightMm * pxPerMm);
 
 const frontDefaultFields: Array<TextField | QrField> = [
   {
@@ -11,17 +14,65 @@ const frontDefaultFields: Array<TextField | QrField> = [
     type: 'multiline',
     label: 'Titel',
     text: 'NFC Chip',
-    x: 28,
-    y: 20,
-    fontSize: 14,
+    x: 130,
+    y: 78,
+    fontSize: 24,
     fontWeight: 700,
-    align: 'center',
+    align: 'left',
     color: DEFAULT_TEXT_COLOR,
     fontFamily: DEFAULT_FONT_FAMILY,
   },
 ];
 
 const backDefaultFields: Array<TextField | QrField> = [];
+
+function buildChipPath(stageW: number, stageH: number) {
+  const h = stageH;
+  const w = stageW;
+
+  const leftBulgeR = h * 0.28;     // kleiner linker Kopf
+  const rightBulgeR = h * 0.48;    // größerer rechter Kopf
+  const bodyTop = h * 0.12;
+  const bodyBottom = h * 0.88;
+  const bodyLeft = leftBulgeR * 0.9;
+  const bodyRight = w - rightBulgeR * 0.95;
+
+  const leftCx = leftBulgeR;
+  const leftCy = h / 2;
+
+  const rightCx = w - rightBulgeR;
+  const rightCy = h / 2;
+
+  return `
+    M ${bodyLeft} ${bodyTop}
+    L ${bodyRight} ${bodyTop}
+    A ${rightBulgeR} ${rightBulgeR} 0 0 1 ${bodyRight} ${bodyBottom}
+    L ${bodyLeft} ${bodyBottom}
+    A ${leftBulgeR} ${leftBulgeR} 0 0 1 ${bodyLeft} ${bodyTop}
+    Z
+  `;
+}
+
+function buildChipSafePath(stageW: number, stageH: number, inset: number) {
+  const h = stageH;
+  const w = stageW;
+
+  const leftBulgeR = h * 0.28 - inset * 0.35;
+  const rightBulgeR = h * 0.48 - inset * 0.35;
+  const bodyTop = h * 0.12 + inset;
+  const bodyBottom = h * 0.88 - inset;
+  const bodyLeft = leftBulgeR * 0.9 + inset * 0.3;
+  const bodyRight = w - rightBulgeR * 0.95 - inset * 0.3;
+
+  return `
+    M ${bodyLeft} ${bodyTop}
+    L ${bodyRight} ${bodyTop}
+    A ${rightBulgeR} ${rightBulgeR} 0 0 1 ${bodyRight} ${bodyBottom}
+    L ${bodyLeft} ${bodyBottom}
+    A ${leftBulgeR} ${leftBulgeR} 0 0 1 ${bodyLeft} ${bodyTop}
+    Z
+  `;
+}
 
 export const nfcChipProduct: DesignerProduct = {
   id: 'nfc-chip',
@@ -33,50 +84,14 @@ export const nfcChipProduct: DesignerProduct = {
   shape: 'custom',
 
   hole: {
-    x: 11.5,
-    y: 49.5,
-    radius: 2,
+    x: 4.4,
+    y: 11.5,
+    radius: 2.1,
   },
 
-  clipPathSvg: (stageW, stageH) => {
-    const w = stageW;
-    const h = stageH;
-    const centerX = w / 2;
-    const topRadius = w / 2;
-    const shoulderY = topRadius + 22;
-    const bottomRadius = w * 0.35;
-    const outerLeft = 0;
-    const outerRight = w;
+  clipPathSvg: (stageW, stageH) => buildChipPath(stageW, stageH),
 
-    const slotOuterWidth = w * 0.52;
-    const slotInnerWidth = w * 0.34;
-    const slotTopY = h * 0.56;
-    const slotBottomY = h * 0.88;
-
-    const slotLeft = centerX - slotOuterWidth / 2;
-    const slotRight = centerX + slotOuterWidth / 2;
-    const innerSlotLeft = centerX - slotInnerWidth / 2;
-    const innerSlotRight = centerX + slotInnerWidth / 2;
-
-    return `
-      M ${outerLeft} ${shoulderY}
-      L ${outerLeft} ${h - bottomRadius}
-      A ${bottomRadius} ${bottomRadius} 0 0 0 ${outerRight} ${h - bottomRadius}
-      L ${outerRight} ${shoulderY}
-      A ${topRadius} ${topRadius} 0 0 0 ${outerLeft} ${shoulderY}
-      Z
-
-      M ${slotLeft} ${slotTopY}
-      L ${slotLeft} ${slotBottomY}
-      A ${bottomRadius * 0.9} ${bottomRadius * 0.9} 0 0 0 ${slotRight} ${slotBottomY}
-      L ${slotRight} ${slotTopY}
-      L ${innerSlotRight} ${slotTopY}
-      L ${innerSlotRight} ${slotBottomY - 8}
-      A ${bottomRadius * 0.55} ${bottomRadius * 0.55} 0 0 1 ${innerSlotLeft} ${slotBottomY - 8}
-      L ${innerSlotLeft} ${slotTopY}
-      Z
-    `;
-  },
+  safeAreaSvg: (stageW, stageH, inset) => buildChipSafePath(stageW, stageH, inset),
 
   backgrounds: {
     black: '/products/nfc-chip/black.png',
@@ -84,53 +99,29 @@ export const nfcChipProduct: DesignerProduct = {
     gold: '/products/nfc-chip/gold.png',
   },
 
-  safeAreaSvg: (stageW, stageH, inset) => {
-  const left = inset;
-  const top = inset;
-  const right = stageW - inset;
-  const bottom = stageH - inset;
-
-  const w = right - left;
-  const h = bottom - top;
-
-  const centerX = left + w / 2;
-  const topRadius = w / 2;
-  const shoulderY = top + topRadius + 22;
-  const bottomRadius = w * 0.35;
-
-  return `
-    M ${left} ${shoulderY}
-    L ${left} ${bottom - bottomRadius}
-    A ${bottomRadius} ${bottomRadius} 0 0 0 ${right} ${bottom - bottomRadius}
-    L ${right} ${shoulderY}
-    A ${topRadius} ${topRadius} 0 0 0 ${left} ${shoulderY}
-    Z
-  `;
-},
-
   preview: {
-  black: {
-    fallbackColor: '#f3f4f6',
-    backgroundImage: '/backgrounds/Ek-weiss.png',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
+    black: {
+      fallbackColor: '#f3f4f6',
+      backgroundImage: '/backgrounds/Ek-weiss.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
+    silver: {
+      fallbackColor: '#f3f4f6',
+      backgroundImage: '/backgrounds/Ek-weiss.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
+    gold: {
+      fallbackColor: '#f3f4f6',
+      backgroundImage: '/backgrounds/Ek-weiss.png',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    },
   },
-  silver: {
-    fallbackColor: '#f3f4f6',
-    backgroundImage: '/backgrounds/Ek-weiss.png',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-  },
-  gold: {
-    fallbackColor: '#f3f4f6',
-    backgroundImage: '/backgrounds/Ek-weiss.png',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-  },
-},
 
   frameStyles: {
     black: {
@@ -159,4 +150,3 @@ export const nfcChipProduct: DesignerProduct = {
   frontDefaultFields,
   backDefaultFields,
 };
-
