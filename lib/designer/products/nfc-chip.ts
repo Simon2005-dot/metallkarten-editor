@@ -3,7 +3,7 @@ import { DEFAULT_FONT_FAMILY, DEFAULT_TEXT_COLOR } from '@/lib/designer/constant
 
 const widthMm = 56.77;
 const heightMm = 23;
-const pxPerMm = 12;
+const pxPerMm = 10;
 
 const stageW = Math.round(widthMm * pxPerMm);
 const stageH = Math.round(heightMm * pxPerMm);
@@ -14,7 +14,7 @@ const frontDefaultFields: Array<TextField | QrField> = [
     type: 'multiline',
     label: 'Titel',
     text: 'NFC Chip',
-    x: 130,
+    x: 110,
     y: 78,
     fontSize: 24,
     fontWeight: 700,
@@ -26,50 +26,105 @@ const frontDefaultFields: Array<TextField | QrField> = [
 
 const backDefaultFields: Array<TextField | QrField> = [];
 
-function buildChipPath(stageW: number, stageH: number) {
-  const h = stageH;
-  const w = stageW;
+function buildChipPath(w: number, h: number) {
+  const cy = h / 2;
 
-  const leftBulgeR = h * 0.28;     // kleiner linker Kopf
-  const rightBulgeR = h * 0.48;    // größerer rechter Kopf
-  const bodyTop = h * 0.12;
-  const bodyBottom = h * 0.88;
-  const bodyLeft = leftBulgeR * 0.9;
-  const bodyRight = w - rightBulgeR * 0.95;
+  // Linke kleinere Rundung
+  const leftR = h * 0.24;
+  const leftCx = leftR + 6;
 
-  const leftCx = leftBulgeR;
-  const leftCy = h / 2;
+  // Rechte größere Rundung
+  const rightR = h * 0.47;
+  const rightCx = w - rightR - 6;
 
-  const rightCx = w - rightBulgeR;
-  const rightCy = h / 2;
+  // Gerade Mittelzone
+  const topY = h * 0.10;
+  const bottomY = h * 0.90;
+
+  // Übergangspunkte links/rechts
+  const startX = leftCx - leftR * 0.95;
+  const bodyLeft = leftCx + leftR * 0.75;
+  const bodyRight = rightCx - rightR * 0.82;
+  const endX = rightCx + rightR * 0.98;
+
+  // Schulterpunkte für weichere Übergänge
+  const topLeftShoulderX = bodyLeft - 22;
+  const topRightShoulderX = bodyRight + 16;
+  const bottomRightShoulderX = bodyRight + 18;
+  const bottomLeftShoulderX = bodyLeft - 20;
 
   return `
-    M ${bodyLeft} ${bodyTop}
-    L ${bodyRight} ${bodyTop}
-    A ${rightBulgeR} ${rightBulgeR} 0 0 1 ${bodyRight} ${bodyBottom}
-    L ${bodyLeft} ${bodyBottom}
-    A ${leftBulgeR} ${leftBulgeR} 0 0 1 ${bodyLeft} ${bodyTop}
+    M ${startX} ${cy}
+
+    C ${startX + 8} ${topY + 12},
+      ${topLeftShoulderX - 8} ${topY},
+      ${bodyLeft} ${topY}
+
+    L ${bodyRight} ${topY}
+
+    C ${topRightShoulderX} ${topY},
+      ${endX} ${cy - rightR * 0.55},
+      ${endX} ${cy}
+
+    C ${endX} ${cy + rightR * 0.55},
+      ${bottomRightShoulderX} ${bottomY},
+      ${bodyRight} ${bottomY}
+
+    L ${bodyLeft} ${bottomY}
+
+    C ${bottomLeftShoulderX} ${bottomY},
+      ${startX + 8} ${cy + leftR * 0.9},
+      ${startX} ${cy}
+
     Z
   `;
 }
 
-function buildChipSafePath(stageW: number, stageH: number, inset: number) {
-  const h = stageH;
-  const w = stageW;
+function buildChipSafePath(w: number, h: number, inset: number) {
+  const cy = h / 2;
 
-  const leftBulgeR = h * 0.28 - inset * 0.35;
-  const rightBulgeR = h * 0.48 - inset * 0.35;
-  const bodyTop = h * 0.12 + inset;
-  const bodyBottom = h * 0.88 - inset;
-  const bodyLeft = leftBulgeR * 0.9 + inset * 0.3;
-  const bodyRight = w - rightBulgeR * 0.95 - inset * 0.3;
+  const leftR = h * 0.24 - inset * 0.35;
+  const leftCx = leftR + 6 + inset * 0.4;
+
+  const rightR = h * 0.47 - inset * 0.4;
+  const rightCx = w - rightR - 6 - inset * 0.4;
+
+  const topY = h * 0.10 + inset;
+  const bottomY = h * 0.90 - inset;
+
+  const startX = leftCx - leftR * 0.88;
+  const bodyLeft = leftCx + leftR * 0.78 + inset * 0.2;
+  const bodyRight = rightCx - rightR * 0.80 - inset * 0.2;
+  const endX = rightCx + rightR * 0.92;
+
+  const topLeftShoulderX = bodyLeft - 18;
+  const topRightShoulderX = bodyRight + 12;
+  const bottomRightShoulderX = bodyRight + 14;
+  const bottomLeftShoulderX = bodyLeft - 16;
 
   return `
-    M ${bodyLeft} ${bodyTop}
-    L ${bodyRight} ${bodyTop}
-    A ${rightBulgeR} ${rightBulgeR} 0 0 1 ${bodyRight} ${bodyBottom}
-    L ${bodyLeft} ${bodyBottom}
-    A ${leftBulgeR} ${leftBulgeR} 0 0 1 ${bodyLeft} ${bodyTop}
+    M ${startX} ${cy}
+
+    C ${startX + 7} ${topY + 10},
+      ${topLeftShoulderX - 6} ${topY},
+      ${bodyLeft} ${topY}
+
+    L ${bodyRight} ${topY}
+
+    C ${topRightShoulderX} ${topY},
+      ${endX} ${cy - rightR * 0.50},
+      ${endX} ${cy}
+
+    C ${endX} ${cy + rightR * 0.50},
+      ${bottomRightShoulderX} ${bottomY},
+      ${bodyRight} ${bottomY}
+
+    L ${bodyLeft} ${bottomY}
+
+    C ${bottomLeftShoulderX} ${bottomY},
+      ${startX + 7} ${cy + leftR * 0.82},
+      ${startX} ${cy}
+
     Z
   `;
 }
@@ -86,12 +141,13 @@ export const nfcChipProduct: DesignerProduct = {
   hole: {
     x: 4.4,
     y: 11.5,
-    radius: 2.1,
+    radius: 2.0,
   },
 
   clipPathSvg: (stageW, stageH) => buildChipPath(stageW, stageH),
 
-  safeAreaSvg: (stageW, stageH, inset) => buildChipSafePath(stageW, stageH, inset),
+  safeAreaSvg: (stageW, stageH, inset) =>
+    buildChipSafePath(stageW, stageH, inset),
 
   backgrounds: {
     black: '/products/nfc-chip/black.png',
@@ -103,21 +159,21 @@ export const nfcChipProduct: DesignerProduct = {
     black: {
       fallbackColor: '#f3f4f6',
       backgroundImage: '/backgrounds/Ek-weiss.png',
-      backgroundSize: 'cover',
+      backgroundSize: 'contain',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
     },
     silver: {
       fallbackColor: '#f3f4f6',
       backgroundImage: '/backgrounds/Ek-weiss.png',
-      backgroundSize: 'cover',
+      backgroundSize: 'contain',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
     },
     gold: {
       fallbackColor: '#f3f4f6',
       backgroundImage: '/backgrounds/Ek-weiss.png',
-      backgroundSize: 'cover',
+      backgroundSize: 'contain',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
     },
