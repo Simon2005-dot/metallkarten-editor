@@ -14,8 +14,8 @@ const frontDefaultFields: Array<TextField | QrField> = [
     type: 'multiline',
     label: 'Titel',
     text: 'NFC Chip',
-    x: 150,
-    y: 82,
+    x: 170,
+    y: 86,
     fontSize: 22,
     fontWeight: 700,
     align: 'left',
@@ -26,34 +26,37 @@ const frontDefaultFields: Array<TextField | QrField> = [
 
 const backDefaultFields: Array<TextField | QrField> = [];
 
-function buildChipOuterPath(w: number, h: number) {
-  const cy = h / 2;
-
+function buildFullImageClipPath(w: number, h: number) {
+  // Ganze Bühne als ClipPath, weil das Produktbild selbst die echte Form zeigt.
+  // Dadurch wird nichts mehr künstlich "schief" nachgebaut.
   return `
-    M 34 ${cy}
-    C 40 38, 72 18, 120 18
-    L ${w - 120} 18
-    C ${w - 70} 18, ${w - 26} 44, ${w - 18} ${cy}
-    C ${w - 26} ${h - 44}, ${w - 70} ${h - 18}, ${w - 120} ${h - 18}
-    L 140 ${h - 18}
-    C 96 ${h - 18}, 62 ${h - 34}, 42 ${h - 52}
-    C 28 ${h - 64}, 26 ${h - 74}, 34 ${cy}
+    M 0 0
+    L ${w} 0
+    L ${w} ${h}
+    L 0 ${h}
     Z
   `;
 }
 
-function buildChipSafePath(w: number, h: number) {
+function buildSimpleSafeAreaPath(w: number, h: number) {
+  // Vereinfachter Sicherheitsbereich:
+  // - Startet rechts vom Loch
+  // - Läuft mittig rechteckig
+  // - Hat rechts einen runden Abschluss
+
+  const top = 30;
+  const bottom = h - 30;
+  const left = 72; // rechts vom Loch
+  const radius = (bottom - top) / 2;
+  const rightArcCenterX = w - 34;
+  const rightJoinX = rightArcCenterX - radius;
   const cy = h / 2;
 
   return `
-    M 56 ${cy}
-    C 64 54, 92 36, 136 36
-    L ${w - 136} 36
-    C ${w - 92} 36, ${w - 54} 58, ${w - 46} ${cy}
-    C ${w - 54} ${h - 58}, ${w - 92} ${h - 36}, ${w - 136} ${h - 36}
-    L 156 ${h - 36}
-    C 118 ${h - 36}, 88 ${h - 48}, 68 ${h - 64}
-    C 56 ${h - 74}, 50 ${h - 82}, 56 ${cy}
+    M ${left} ${top}
+    L ${rightJoinX} ${top}
+    A ${radius} ${radius} 0 0 1 ${rightJoinX} ${bottom}
+    L ${left} ${bottom}
     Z
   `;
 }
@@ -67,20 +70,23 @@ export const nfcChipProduct: DesignerProduct = {
   safeMarginMm: 1.5,
   shape: 'custom',
 
+  // Lochposition in mm
   hole: {
     x: 5.2,
     y: 11.5,
     radius: 2.1,
   },
 
-  clipPathSvg: () => buildChipOuterPath(stageW, stageH),
+  // Ganze Bildfläche benutzen
+  clipPathSvg: (stageW, stageH) => buildFullImageClipPath(stageW, stageH),
 
-  safeAreaSvg: () => buildChipSafePath(stageW, stageH),
+  // Vereinfachter Sicherheitsbereich
+  safeAreaSvg: (stageW, stageH) => buildSimpleSafeAreaPath(stageW, stageH),
 
   backgrounds: {
-    black: '/products/nfc-chip/black.png',
-    silver: '/products/nfc-chip/silver.png',
-    gold: '/products/nfc-chip/gold.png',
+    black: '/backgrounds/Ek-weiss.png',
+    silver: '/backgrounds/Ek-weiss.png',
+    gold: '/backgrounds/Ek-weiss.png',
   },
 
   preview: {
@@ -109,18 +115,18 @@ export const nfcChipProduct: DesignerProduct = {
 
   frameStyles: {
     black: {
-      border: '#3f3f46',
-      gridLine: 'rgba(255,255,255,0.08)',
+      border: 'rgba(0,0,0,0.12)',
+      gridLine: 'rgba(0,0,0,0.06)',
       safeArea: '#60a5fa',
     },
     silver: {
-      border: '#9ca3af',
-      gridLine: 'rgba(0,0,0,0.08)',
+      border: 'rgba(0,0,0,0.12)',
+      gridLine: 'rgba(0,0,0,0.06)',
       safeArea: '#2563eb',
     },
     gold: {
-      border: '#a16207',
-      gridLine: 'rgba(0,0,0,0.08)',
+      border: 'rgba(0,0,0,0.12)',
+      gridLine: 'rgba(0,0,0,0.06)',
       safeArea: '#2563eb',
     },
   },
