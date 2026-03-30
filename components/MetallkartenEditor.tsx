@@ -1017,6 +1017,125 @@ function createNfcField(
   };
 }
 
+function getChipSafeAreaRect(stageW: number, stageH: number) {
+  const top = 30;
+  const bottom = stageH - 30;
+  const left = 72;
+
+  const radius = (bottom - top) / 2;
+  const arcCenterX = stageW - 34;
+  const arcCenterY = stageH / 2;
+  const rightJoinX = arcCenterX - radius;
+
+  return {
+    top,
+    bottom,
+    left,
+    radius,
+    arcCenterX,
+    arcCenterY,
+    rightJoinX,
+  };
+}
+
+function clampRectToMetalSafeArea(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  stageW: number,
+  stageH: number,
+  safeMargin: number,
+) {
+  return {
+    x: clamp(x, safeMargin, stageW - safeMargin - width),
+    y: clamp(y, safeMargin, stageH - safeMargin - height),
+  };
+}
+
+function clampRectToChipSafeArea(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  stageW: number,
+  stageH: number,
+) {
+  const area = getChipSafeAreaRect(stageW, stageH);
+
+  let nextX = x;
+  let nextY = y;
+
+  // oben / unten
+  nextY = clamp(nextY, area.top, area.bottom - height);
+
+  // links
+  nextX = Math.max(nextX, area.left);
+
+  // zuerst grob nach rechts begrenzen
+  const maxRight = area.arcCenterX + area.radius;
+  nextX = Math.min(nextX, maxRight - width);
+
+  const rightEdge = nextX + width;
+
+  // wenn Feld komplett im rechteckigen Teil ist: fertig
+  if (rightEdge <= area.rightJoinX) {
+    return { x: nextX, y: nextY };
+  }
+
+  // sonst prüfen wir die beiden rechten Ecken gegen die rechte Rundung
+  const points = [
+    { x: nextX + width, y: nextY },
+    { x: nextX + width, y: nextY + height },
+  ];
+
+  for (let i = 0; i < 10; i++) {
+    let inside = true;
+
+    for (const p of points) {
+      if (p.x <= area.rightJoinX) continue;
+
+      const dx = p.x - area.arcCenterX;
+      const dy = p.y - area.arcCenterY;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq > area.radius * area.radius) {
+        inside = false;
+        break;
+      }
+    }
+
+    if (inside) break;
+    nextX -= 2;
+    if (nextX < area.left) {
+      nextX = area.left;
+      break;
+    }
+
+    points[0].x = nextX + width;
+    points[1].x = nextX + width;
+  }
+
+  return { x: nextX, y: nextY };
+}
+
+function clampFieldToProductSafeArea(
+  productKey: 'metal' | 'chip',
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  stageW: number,
+  stageH: number,
+  safeMargin: number,
+) {
+  if (productKey === 'chip') {
+    return clampRectToChipSafeArea(x, y, width, height, stageW, stageH);
+  }
+
+  return clampRectToMetalSafeArea(x, y, width, height, stageW, stageH, safeMargin);
+}
+
 export default function MetallkartenEditor() {
   const [productKey, setProductKey] = useState<'metal' | 'chip'>('metal');
   const product = PRODUCTS[productKey];
@@ -1551,8 +1670,37 @@ useEffect(() => {
           nextHeight = roundToGrid(nextHeight, GRID_SIZE);
         }
 
-        nextWidth = clamp(nextWidth, 24, STAGE_W - field.x - SAFE_MARGIN);
-        nextHeight = clamp(nextHeight, 24, STAGE_H - field.y - SAFE_MARGIN);
+       nextWidth = Math.max(24, nextWidth);
+nextHeight = Math.max(24, nextHeight);
+
+const clampedPos = clampFieldToProductSafeArea(
+  productKey,
+  field.x,
+  field.y,
+  nextWidth,
+  nextHeight,
+  STAGE_W,
+  STAGE_H,
+  SAFE_MARGIN,
+);
+
+nextWidth = Math.min(nextWidth, STAGE_W - clampedPos.x);
+nextHeight = Math.min(nextHeight, STAGE_H - clampedPos.y);
+
+if (productKey === 'chip') {
+  const chipAdjusted = clampFieldToProductSafeArea(
+    productKey,
+    field.x,
+    field.y,
+    nextWidth,
+    nextHeight,
+    STAGE_W,
+    STAGE_H,
+    SAFE_MARGIN,
+  );
+  nextWidth = Math.max(24, nextWidth - Math.max(0, field.x - chipAdjusted.x));
+  nextHeight = Math.max(24, nextHeight);
+}
         setGuideLines([]);
         updateField(field.id, { width: nextWidth, height: nextHeight });
         return;
@@ -1566,8 +1714,35 @@ useEffect(() => {
 
         if (snapToGrid) nextSize = roundToGrid(nextSize, GRID_SIZE);
 
-        const maxSize = Math.min(STAGE_W - field.x - SAFE_MARGIN, STAGE_H - field.y - SAFE_MARGIN);
-        nextSize = clamp(nextSize, 48, maxSize);
+        nextSize = Math.max(48, nextSize);
+
+let test = clampFieldToProductSafeArea(
+  productKey,
+  field.x,
+  field.y,
+  nextSize,
+  nextSize,
+  STAGE_W,
+  STAGE_H,
+  SAFE_MARGIN,
+);
+
+while (
+  (test.x !== field.x || test.y !== field.y) &&
+  nextSize > 48
+) {
+  nextSize -= 2;
+  test = clampFieldToProductSafeArea(
+    productKey,
+    field.x,
+    field.y,
+    nextSize,
+    nextSize,
+    STAGE_W,
+    STAGE_H,
+    SAFE_MARGIN,
+  );
+}
         setGuideLines([]);
         updateField(field.id, { size: nextSize });
       }
@@ -1596,8 +1771,19 @@ useEffect(() => {
     x = snapped.x;
     y = snapped.y;
 
-    x = clamp(x, SAFE_MARGIN, STAGE_W - SAFE_MARGIN - bounds.width);
-    y = clamp(y, SAFE_MARGIN, STAGE_H - SAFE_MARGIN - bounds.height);
+    const clampedPos = clampFieldToProductSafeArea(
+  productKey,
+  x,
+  y,
+  bounds.width,
+  bounds.height,
+  STAGE_W,
+  STAGE_H,
+  SAFE_MARGIN,
+);
+
+x = clampedPos.x;
+y = clampedPos.y;
 
     setGuideLines(snapped.guides);
     updateField(field.id, { x, y });
@@ -1606,9 +1792,21 @@ useEffect(() => {
   const nudgeSelected = (dx: number, dy: number) => {
     if (!selected) return;
     const bounds = fieldBounds(selected);
-    const x = clamp(selected.x + dx, SAFE_MARGIN, STAGE_W - SAFE_MARGIN - bounds.width);
-    const y = clamp(selected.y + dy, SAFE_MARGIN, STAGE_H - SAFE_MARGIN - bounds.height);
-    updateField(selected.id, { x, y });
+    const clampedPos = clampFieldToProductSafeArea(
+  productKey,
+  selected.x + dx,
+  selected.y + dy,
+  bounds.width,
+  bounds.height,
+  STAGE_W,
+  STAGE_H,
+  SAFE_MARGIN,
+);
+
+updateField(selected.id, {
+  x: clampedPos.x,
+  y: clampedPos.y,
+});
   };
 
   useEffect(() => {
@@ -2895,8 +3093,22 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
                           type="number"
                           step="0.1"
                           value={pxToMm(selected.x, PX_PER_MM).toFixed(1)}
-                          onChange={(e) =>
-  updateField(selected.id, { x: mmToPx(Number(e.target.value), PX_PER_MM) })
+                        onChange={(e) => {
+  const nextX = mmToPx(Number(e.target.value), PX_PER_MM);
+  const bounds = fieldBounds(selected);
+  const clampedPos = clampFieldToProductSafeArea(
+    productKey,
+    nextX,
+    selected.y,
+    bounds.width,
+    bounds.height,
+    STAGE_W,
+    STAGE_H,
+    SAFE_MARGIN,
+  );
+
+  updateField(selected.id, { x: clampedPos.x });
+}
 }
                           style={inputStyle}
                         />
@@ -2907,9 +3119,22 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
                           type="number"
                           step="0.1"
                           value={pxToMm(selected.y, PX_PER_MM).toFixed(1)}
-                          onChange={(e) =>
-  updateField(selected.id, { y: mmToPx(Number(e.target.value), PX_PER_MM) })
-}
+                          onChange={(e) => {
+  const nextY = mmToPx(Number(e.target.value), PX_PER_MM);
+  const bounds = fieldBounds(selected);
+  const clampedPos = clampFieldToProductSafeArea(
+    productKey,
+    selected.x,
+    nextY,
+    bounds.width,
+    bounds.height,
+    STAGE_W,
+    STAGE_H,
+    SAFE_MARGIN,
+  );
+
+  updateField(selected.id, { y: clampedPos.y });
+}}
                           style={inputStyle}
                         />
                       </div>
