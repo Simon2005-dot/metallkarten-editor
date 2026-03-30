@@ -90,28 +90,28 @@ export const nfcChipProduct: DesignerProduct = {
   },
 
   preview: {
-    black: {
-      fallbackColor: '#f3f4f6',
-      backgroundImage: '/backgrounds/Ek-weiss.png',
-      backgroundSize: '100% 100%',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-    },
-    silver: {
-      fallbackColor: '#f3f4f6',
-      backgroundImage: '/backgrounds/Ek-weiss.png',
-      backgroundSize: '100% 100%',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-    },
-    gold: {
-      fallbackColor: '#f3f4f6',
-      backgroundImage: '/backgrounds/Ek-weiss.png',
-      backgroundSize: '100% 100%',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-    },
+  black: {
+    fallbackColor: '#f3f4f6',
+    backgroundImage: '/backgrounds/Ek-weiss.png',
+    backgroundSize: 'contain',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
   },
+  silver: {
+    fallbackColor: '#f3f4f6',
+    backgroundImage: '/backgrounds/Ek-weiss.png',
+    backgroundSize: 'contain',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  },
+  gold: {
+    fallbackColor: '#f3f4f6',
+    backgroundImage: '/backgrounds/Ek-weiss.png',
+    backgroundSize: 'contain',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+  },
+},
 
   frameStyles: {
     black: {
