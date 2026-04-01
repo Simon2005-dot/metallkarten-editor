@@ -705,36 +705,101 @@ function boostContrast(imageData: ImageData, contrast = 40) {
 
   return imageData;
 }
+function getPixelAt(data: Uint8ClampedArray, width: number, x: number, y: number) {
+  const i = (y * width + x) * 4;
+  return {
+    r: data[i],
+    g: data[i + 1],
+    b: data[i + 2],
+    a: data[i + 3],
+  };
+}
+
+function colorDistance(
+  a: { r: number; g: number; b: number },
+  b: { r: number; g: number; b: number },
+) {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+function averageBackgroundFromCorners(imageData: ImageData, sampleSize = 12) {
+  const { width, height, data } = imageData;
+
+  const points: Array<{ r: number; g: number; b: number }> = [];
+
+  const cornerRects = [
+    { startX: 0, endX: Math.min(sampleSize, width), startY: 0, endY: Math.min(sampleSize, height) },
+    { startX: Math.max(0, width - sampleSize), endX: width, startY: 0, endY: Math.min(sampleSize, height) },
+    { startX: 0, endX: Math.min(sampleSize, width), startY: Math.max(0, height - sampleSize), endY: height },
+    { startX: Math.max(0, width - sampleSize), endX: width, startY: Math.max(0, height - sampleSize), endY: height },
+  ];
+
+  for (const rect of cornerRects) {
+    for (let y = rect.startY; y < rect.endY; y++) {
+      for (let x = rect.startX; x < rect.endX; x++) {
+        const p = getPixelAt(data, width, x, y);
+        if (p.a < 20) continue;
+        points.push({ r: p.r, g: p.g, b: p.b });
+      }
+    }
+  }
+
+  if (points.length === 0) {
+    return { r: 255, g: 255, b: 255 };
+  }
+
+  const sum = points.reduce(
+    (acc, p) => {
+      acc.r += p.r;
+      acc.g += p.g;
+      acc.b += p.b;
+      return acc;
+    },
+    { r: 0, g: 0, b: 0 },
+  );
+
+  return {
+    r: Math.round(sum.r / points.length),
+    g: Math.round(sum.g / points.length),
+    b: Math.round(sum.b / points.length),
+  };
+}
+
 
 function maskFromImageData(
   imageData: ImageData,
-  whiteThreshold = 235,
-  laserThreshold = 165,
+  backgroundTolerance = 28,
+  minAlpha = 20,
 ) {
   const { width, height, data } = imageData;
   const mask = createBooleanMask(width, height, false);
 
+  const backgroundColor = averageBackgroundFromCorners(imageData, 16);
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
+
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       const a = data[i + 3];
 
-      if (a < 20) {
+      if (a < minAlpha) {
         mask[y][x] = false;
         continue;
       }
 
-      const isNearWhite = r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold;
-      if (isNearWhite) {
-        mask[y][x] = false;
-        continue;
-      }
+      const distance = colorDistance(
+        { r, g, b },
+        backgroundColor,
+      );
 
-      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-      mask[y][x] = gray < laserThreshold;
+      // Alles behalten, was sich sichtbar vom Hintergrund unterscheidet
+      mask[y][x] = distance > backgroundTolerance;
     }
   }
 
@@ -742,6 +807,7 @@ function maskFromImageData(
   const closed = closeMask(cleaned, 1);
   return removeIsolatedPixels(closed, 2);
 }
+
 
 type Edge = {
   sx: number;
@@ -911,13 +977,13 @@ function svgDataUrl(svg: string) {
 async function traceImageToVectorAsset(
   src: string,
   options?: {
-    whiteThreshold?: number;
-    laserThreshold?: number;
-    upscaleMinWidth?: number;
-    upscaleMinHeight?: number;
-    upscaleMaxScale?: number;
-    contrast?: number;
-  },
+  backgroundTolerance?: number;
+  minAlpha?: number;
+  upscaleMinWidth?: number;
+  upscaleMinHeight?: number;
+  upscaleMaxScale?: number;
+  contrast?: number;
+},
 ): Promise<VectorTraceResult> {
   const upscaled = await upscaleImageSource(src, {
     minWidth: options?.upscaleMinWidth ?? 1600,
@@ -944,9 +1010,10 @@ async function traceImageToVectorAsset(
 
   const mask = maskFromImageData(
   boosted,
-  options?.whiteThreshold ?? 245,
-  options?.laserThreshold ?? 180,
+  options?.backgroundTolerance ?? 28,
+  options?.minAlpha ?? 20,
 );
+
 const transparentImageData = new ImageData(
   new Uint8ClampedArray(boosted.data),
   boosted.width,
@@ -1285,13 +1352,13 @@ const holePx = product.hole
       }));
 
       const traced = await traceImageToVectorAsset(field.originalSrc || field.src, {
-        whiteThreshold: field.threshold ?? 235,
-        laserThreshold: field.laserThreshold ?? 165,
-        upscaleMinWidth: 1600,
-        upscaleMinHeight: 900,
-        upscaleMaxScale: 4,
-        contrast: 40,
-      });
+  backgroundTolerance: 28,
+  minAlpha: 20,
+  upscaleMinWidth: 1600,
+  upscaleMinHeight: 900,
+  upscaleMaxScale: 4,
+  contrast: 40,
+});
 
       updateLogoFieldAcrossCards(cardId, sideToUpdate, field.id, (currentField) => ({
         ...currentField,
@@ -1543,13 +1610,13 @@ useEffect(() => {
         setIsProcessingImage(true);
 
         const traced = await traceImageToVectorAsset(src, {
-          whiteThreshold: 235,
-          laserThreshold: 165,
-          upscaleMinWidth: 1600,
-          upscaleMinHeight: 900,
-          upscaleMaxScale: 4,
-          contrast: 40,
-        });
+  backgroundTolerance: 28,
+  minAlpha: 20,
+  upscaleMinWidth: 1600,
+  upscaleMinHeight: 900,
+  upscaleMaxScale: 4,
+  contrast: 40,
+});
 
         setCards((current) =>
           current.map((card) => {
