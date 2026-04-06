@@ -282,8 +282,8 @@ function logoToSvg(
       </svg>`;
     }
 
-    const shouldOutline = cardFinish === 'black';
-    const outlineOffset = 0.2;
+    const shouldOutline = false;
+    const outlineOffset = 0;
 
     if (!shouldOutline) {
       return `<image
@@ -1382,8 +1382,7 @@ const selectedDistances = selected
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
 const canExport = cleanOrderNumber.length >= 4;
 const previewTextColor = getLaserColor(activeCard.cardFinish, side);
-const shouldShowUvLogoOutline =
-  outputMode === 'uv' && activeCard.cardFinish === 'black';
+const shouldShowUvLogoOutline = false;
 const uvOutlinePx = Math.max(1, Math.round(PX_PER_MM * 0.35));
 const currentBackground = product.backgrounds[activeCard.cardFinish];
 const currentPreview = product.preview[activeCard.cardFinish];
