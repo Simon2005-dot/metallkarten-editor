@@ -283,7 +283,7 @@ function logoToSvg(
     }
 
     const shouldOutline = cardFinish === 'black';
-    const outlineOffset = 0.5;
+    const outlineOffset = 0;
 
     if (!shouldOutline) {
       return `<image
