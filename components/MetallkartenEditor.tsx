@@ -240,26 +240,77 @@ function qrSvgGroup(field: PreparedQrField, outputMode: OutputMode) {
   return rects;
 }
 
-function logoToSvg(field: LogoField, outputMode: OutputMode) {
+function logoToSvg(
+  field: LogoField,
+  outputMode: OutputMode,
+  cardFinish?: CardFinishKey,
+) {
   if (outputMode === 'uv') {
-  const imageSrc = field.exportSrc || field.originalSrc || field.src;
+    const imageSrc = field.exportSrc || field.originalSrc || field.src;
 
-  if (field.label === 'NFC Symbol') {
-    const fill = field.color || '#000000';
+    if (field.label === 'NFC Symbol') {
+      const fill = field.color || '#000000';
+
+      return `<svg
+        x="${field.x}"
+        y="${field.y}"
+        width="${field.width}"
+        height="${field.height}"
+        viewBox="0 0 ${field.width} ${field.height}"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          <mask id="mask-${escapeAttribute(field.id)}">
+            <image
+              x="0"
+              y="0"
+              width="${field.width}"
+              height="${field.height}"
+              preserveAspectRatio="xMidYMid meet"
+              href="${escapeAttribute(imageSrc)}"
+            />
+          </mask>
+        </defs>
+        <rect
+          x="0"
+          y="0"
+          width="${field.width}"
+          height="${field.height}"
+          fill="${escapeAttribute(fill)}"
+          mask="url(#mask-${escapeAttribute(field.id)})"
+        />
+      </svg>`;
+    }
+
+    const shouldOutline = cardFinish === 'black';
+    const outlineOffset = 1.2;
+
+    if (!shouldOutline) {
+      return `<image
+        x="${field.x}"
+        y="${field.y}"
+        width="${field.width}"
+        height="${field.height}"
+        preserveAspectRatio="xMidYMid meet"
+        href="${escapeAttribute(imageSrc)}"
+      />`;
+    }
+
+    const maskId = `mask-${escapeAttribute(field.id)}`;
 
     return `<svg
-      x="${field.x}"
-      y="${field.y}"
-      width="${field.width}"
-      height="${field.height}"
-      viewBox="0 0 ${field.width} ${field.height}"
+      x="${field.x - outlineOffset}"
+      y="${field.y - outlineOffset}"
+      width="${field.width + outlineOffset * 2}"
+      height="${field.height + outlineOffset * 2}"
+      viewBox="0 0 ${field.width + outlineOffset * 2} ${field.height + outlineOffset * 2}"
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
-        <mask id="mask-${escapeAttribute(field.id)}">
+        <mask id="${maskId}">
           <image
-            x="0"
-            y="0"
+            x="${outlineOffset}"
+            y="${outlineOffset}"
             width="${field.width}"
             height="${field.height}"
             preserveAspectRatio="xMidYMid meet"
@@ -267,26 +318,50 @@ function logoToSvg(field: LogoField, outputMode: OutputMode) {
           />
         </mask>
       </defs>
+
       <rect
         x="0"
+        y="${outlineOffset}"
+        width="${field.width}"
+        height="${field.height}"
+        fill="#ffffff"
+        mask="url(#${maskId})"
+      />
+      <rect
+        x="${outlineOffset * 2}"
+        y="${outlineOffset}"
+        width="${field.width}"
+        height="${field.height}"
+        fill="#ffffff"
+        mask="url(#${maskId})"
+      />
+      <rect
+        x="${outlineOffset}"
         y="0"
         width="${field.width}"
         height="${field.height}"
-        fill="${escapeAttribute(fill)}"
-        mask="url(#mask-${escapeAttribute(field.id)})"
+        fill="#ffffff"
+        mask="url(#${maskId})"
+      />
+      <rect
+        x="${outlineOffset}"
+        y="${outlineOffset * 2}"
+        width="${field.width}"
+        height="${field.height}"
+        fill="#ffffff"
+        mask="url(#${maskId})"
+      />
+
+      <image
+        x="${outlineOffset}"
+        y="${outlineOffset}"
+        width="${field.width}"
+        height="${field.height}"
+        preserveAspectRatio="xMidYMid meet"
+        href="${escapeAttribute(imageSrc)}"
       />
     </svg>`;
   }
-
-  return `<image
-    x="${field.x}"
-    y="${field.y}"
-    width="${field.width}"
-    height="${field.height}"
-    preserveAspectRatio="xMidYMid meet"
-    href="${escapeAttribute(imageSrc)}"
-  />`;
-}
 
   if (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight) {
     throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
@@ -344,7 +419,7 @@ async function prepareFieldsForExport(
 function exportSideSvg(
   fields: PreparedField[],
   includeGuide: boolean,
-  meta: { orderNumber: string; side: Side; cardName: string },
+  meta: { orderNumber: string; side: Side; cardName: string; cardFinish: CardFinishKey },
   outputMode: OutputMode,
   dimensions: {
     cardWidth: number;
@@ -360,7 +435,7 @@ function exportSideSvg(
     .map((field) => {
       if (field.type === 'multiline') return textToSvg(field);
       if (field.type === 'qr') return qrSvgGroup(field, outputMode);
-      if (field.type === 'logo') return logoToSvg(field, outputMode);
+      if (field.type === 'logo') return logoToSvg(field, outputMode, meta.cardFinish);
       return '';
     })
     .join('\n');
@@ -1307,6 +1382,9 @@ const selectedDistances = selected
   const cleanOrderNumber = sanitizeOrderNumber(orderNumber);
 const canExport = cleanOrderNumber.length >= 4;
 const previewTextColor = getLaserColor(activeCard.cardFinish, side);
+const shouldShowUvLogoOutline =
+  outputMode === 'uv' && activeCard.cardFinish === 'black';
+const uvOutlinePx = Math.max(1, Math.round(PX_PER_MM * 0.35));
 const currentBackground = product.backgrounds[activeCard.cardFinish];
 const currentPreview = product.preview[activeCard.cardFinish];
 const frameStyle = product.frameStyles[activeCard.cardFinish];
@@ -2012,10 +2090,11 @@ const frontSvg = exportSideSvg(
   preparedFront,
   true,
   {
-    orderNumber: cleanOrderNumber,
-    side: 'front',
-    cardName: card.name,
-  },
+  orderNumber: cleanOrderNumber,
+  side: 'front',
+  cardName: card.name,
+  cardFinish: card.cardFinish,
+},
   outputMode,
   {
     cardWidth: CARD_WIDTH,
@@ -2030,10 +2109,11 @@ const backSvg = exportSideSvg(
   preparedBack,
   true,
   {
-    orderNumber: cleanOrderNumber,
-    side: 'back',
-    cardName: card.name,
-  },
+  orderNumber: cleanOrderNumber,
+  side: 'back',
+  cardName: card.name,
+  cardFinish: card.cardFinish,
+},
   outputMode,
   {
     cardWidth: CARD_WIDTH,
@@ -3033,40 +3113,116 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
           }}
         >
           {outputMode === 'uv' ? (
-  field.label === 'NFC Symbol' ? (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        WebkitMaskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
-        WebkitMaskRepeat: 'no-repeat',
-        WebkitMaskSize: 'contain',
-        WebkitMaskPosition: 'center',
-        maskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
-        maskRepeat: 'no-repeat',
-        maskSize: 'contain',
-        maskPosition: 'center',
-        backgroundColor: field.color || '#000000',
-        opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
-        pointerEvents: 'none',
-        userSelect: 'none',
-      }}
-    />
-  ) : (
-    <img
-      src={field.exportSrc || field.originalSrc || field.src}
-      alt={field.label}
-      draggable={false}
-      style={{
-        width: '100%',
-        height: '100%',
-        objectFit: 'contain',
-        opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
-        pointerEvents: 'none',
-        userSelect: 'none',
-      }}
-    />
-  )
+  <div
+    style={{
+      position: 'relative',
+      width: '100%',
+      height: '100%',
+      opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
+      pointerEvents: 'none',
+      userSelect: 'none',
+    }}
+  >
+    {shouldShowUvLogoOutline && field.label !== 'NFC Symbol' ? (
+      <>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            WebkitMaskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            maskPosition: 'center',
+            backgroundColor: '#ffffff',
+            transform: `translate(-${uvOutlinePx}px, 0)`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            WebkitMaskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            maskPosition: 'center',
+            backgroundColor: '#ffffff',
+            transform: `translate(${uvOutlinePx}px, 0)`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            WebkitMaskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            maskPosition: 'center',
+            backgroundColor: '#ffffff',
+            transform: `translate(0, -${uvOutlinePx}px)`,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            WebkitMaskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            WebkitMaskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+            maskRepeat: 'no-repeat',
+            maskSize: 'contain',
+            maskPosition: 'center',
+            backgroundColor: '#ffffff',
+            transform: `translate(0, ${uvOutlinePx}px)`,
+          }}
+        />
+      </>
+    ) : null}
+
+    {field.label === 'NFC Symbol' ? (
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          WebkitMaskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+          WebkitMaskRepeat: 'no-repeat',
+          WebkitMaskSize: 'contain',
+          WebkitMaskPosition: 'center',
+          maskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+          maskRepeat: 'no-repeat',
+          maskSize: 'contain',
+          maskPosition: 'center',
+          backgroundColor: field.color || '#000000',
+        }}
+      />
+    ) : (
+      <img
+        src={field.exportSrc || field.originalSrc || field.src}
+        alt={field.label}
+        draggable={false}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+        }}
+      />
+    )}
+  </div>
 ) : (
             <div
               style={{
