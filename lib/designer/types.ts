@@ -50,6 +50,7 @@ export type LogoField = BaseField & {
   vectorHeight?: number;
   vectorStatus?: 'idle' | 'processing' | 'ready' | 'error';
   preserveFullColor?: boolean;
+  color?: string;
 };
 
 export type Field = TextField | QrField | LogoField;

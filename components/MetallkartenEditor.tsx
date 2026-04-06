@@ -242,17 +242,51 @@ function qrSvgGroup(field: PreparedQrField, outputMode: OutputMode) {
 
 function logoToSvg(field: LogoField, outputMode: OutputMode) {
   if (outputMode === 'uv') {
-    const imageSrc = field.exportSrc || field.originalSrc || field.src;
+  const imageSrc = field.exportSrc || field.originalSrc || field.src;
 
-    return `<image
+  if (field.label === 'NFC Symbol') {
+    const fill = field.color || '#000000';
+
+    return `<svg
       x="${field.x}"
       y="${field.y}"
       width="${field.width}"
       height="${field.height}"
+      viewBox="0 0 ${field.width} ${field.height}"
       preserveAspectRatio="xMidYMid meet"
-      href="${escapeAttribute(imageSrc)}"
-    />`;
+    >
+      <defs>
+        <mask id="mask-${escapeAttribute(field.id)}">
+          <image
+            x="0"
+            y="0"
+            width="${field.width}"
+            height="${field.height}"
+            preserveAspectRatio="xMidYMid meet"
+            href="${escapeAttribute(imageSrc)}"
+          />
+        </mask>
+      </defs>
+      <rect
+        x="0"
+        y="0"
+        width="${field.width}"
+        height="${field.height}"
+        fill="${escapeAttribute(fill)}"
+        mask="url(#mask-${escapeAttribute(field.id)})"
+      />
+    </svg>`;
   }
+
+  return `<image
+    x="${field.x}"
+    y="${field.y}"
+    width="${field.width}"
+    height="${field.height}"
+    preserveAspectRatio="xMidYMid meet"
+    href="${escapeAttribute(imageSrc)}"
+  />`;
+}
 
   if (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight) {
     throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
@@ -1083,6 +1117,7 @@ function createNfcField(
     laserThreshold: 165,
     laserMode: 'original',
     vectorStatus: 'idle',
+    color: '#000000',
   };
 }
 
@@ -2998,20 +3033,41 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
           }}
         >
           {outputMode === 'uv' ? (
-            <img
-              src={field.exportSrc || field.originalSrc || field.src}
-              alt={field.label}
-              draggable={false}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
-                pointerEvents: 'none',
-                userSelect: 'none',
-              }}
-            />
-          ) : (
+  field.label === 'NFC Symbol' ? (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        WebkitMaskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+        WebkitMaskRepeat: 'no-repeat',
+        WebkitMaskSize: 'contain',
+        WebkitMaskPosition: 'center',
+        maskImage: `url(${field.exportSrc || field.originalSrc || field.src})`,
+        maskRepeat: 'no-repeat',
+        maskSize: 'contain',
+        maskPosition: 'center',
+        backgroundColor: field.color || '#000000',
+        opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    />
+  ) : (
+    <img
+      src={field.exportSrc || field.originalSrc || field.src}
+      alt={field.label}
+      draggable={false}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+        opacity: field.vectorStatus === 'processing' ? 0.85 : 1,
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    />
+  )
+) : (
             <div
               style={{
                 width: '100%',
@@ -3367,6 +3423,24 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
                         </div>
                       </>
                     )}
+
+                    {outputMode === 'uv' && selected.label === 'NFC Symbol' ? (
+  <div>
+    <label>NFC-Farbe</label>
+    <input
+      type="color"
+      value={selected.color ?? '#000000'}
+      onChange={(e) =>
+        updateField(selected.id, { color: e.target.value })
+      }
+      style={{
+        ...inputStyle,
+        padding: 4,
+        height: 44,
+      }}
+    />
+  </div>
+) : null}
 
                     {selected.type === 'logo' && (
                       <>
