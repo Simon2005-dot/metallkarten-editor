@@ -103,18 +103,22 @@ function cloneFields(fields: Field[]): Field[] {
   return fields.map((field) => {
     if (field.type === 'logo') {
       const originalSrc = field.originalSrc || field.src;
+      const isSvg = originalSrc.startsWith('data:image/svg+xml');
+
       return {
         ...field,
         id: buildUniqueId(field.id),
         src: originalSrc,
         originalSrc,
-        exportSrc: originalSrc,
-        vectorMarkup: undefined,
-        vectorWidth: undefined,
-        vectorHeight: undefined,
-        removedBackground: false,
-        laserMode: 'original',
-        vectorStatus: 'idle',
+        exportSrc: isSvg ? originalSrc : field.exportSrc || originalSrc,
+        vectorMarkup: isSvg ? field.vectorMarkup : undefined,
+        vectorWidth: isSvg ? field.vectorWidth : undefined,
+        vectorHeight: isSvg ? field.vectorHeight : undefined,
+        removedBackground: isSvg ? true : false,
+        laserMode: isSvg ? 'laser' : 'original',
+        vectorStatus: isSvg
+          ? field.vectorStatus || 'ready'
+          : 'idle',
       };
     }
 
@@ -1083,6 +1087,64 @@ function svgDataUrl(svg: string) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+
+async function parseSvgDataUrl(dataUrl: string): Promise<{
+  vectorMarkup: string;
+  vectorWidth: number;
+  vectorHeight: number;
+}> {
+  let svgText = '';
+
+  if (dataUrl.startsWith('data:image/svg+xml')) {
+    const [, payload = ''] = dataUrl.split(',', 2);
+    const isBase64 = dataUrl.includes(';base64');
+
+    svgText = isBase64 ? atob(payload) : decodeURIComponent(payload);
+  } else {
+    throw new Error('Ungültige SVG-Datenquelle.');
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, 'image/svg+xml');
+  const svg = doc.documentElement;
+
+  if (!svg || svg.tagName.toLowerCase() !== 'svg') {
+    throw new Error('SVG konnte nicht gelesen werden.');
+  }
+
+  const viewBox = svg.getAttribute('viewBox');
+  let vectorWidth = 100;
+  let vectorHeight = 100;
+
+  if (viewBox) {
+    const parts = viewBox
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+
+    if (parts.length === 4) {
+      vectorWidth = parts[2] || vectorWidth;
+      vectorHeight = parts[3] || vectorHeight;
+    }
+  } else {
+    const widthAttr = svg.getAttribute('width') || '';
+    const heightAttr = svg.getAttribute('height') || '';
+
+    const parsedWidth = Number(widthAttr.replace(/[^\d.]/g, ''));
+    const parsedHeight = Number(heightAttr.replace(/[^\d.]/g, ''));
+
+    if (Number.isFinite(parsedWidth) && parsedWidth > 0) vectorWidth = parsedWidth;
+    if (Number.isFinite(parsedHeight) && parsedHeight > 0) vectorHeight = parsedHeight;
+  }
+
+  return {
+    vectorMarkup: svg.innerHTML,
+    vectorWidth,
+    vectorHeight,
+  };
+}
+
+
 async function traceImageToVectorAsset(
   src: string,
   options?: {
@@ -1548,10 +1610,11 @@ useEffect(() => {
     for (const card of cards) {
       for (const field of card.frontFields) {
         if (
-          field.type === 'logo' &&
-          !field.vectorMarkup &&
-          field.vectorStatus !== 'processing'
-        ) {
+  field.type === 'logo' &&
+  !field.vectorMarkup &&
+  field.vectorStatus !== 'processing' &&
+  !(field.originalSrc || field.src).startsWith('data:image/svg+xml')
+) {
           logosToProcess.push({
             cardId: card.id,
             side: 'front',
@@ -1562,10 +1625,11 @@ useEffect(() => {
 
       for (const field of card.backFields) {
         if (
-          field.type === 'logo' &&
-          !field.vectorMarkup &&
-          field.vectorStatus !== 'processing'
-        ) {
+  field.type === 'logo' &&
+  !field.vectorMarkup &&
+  field.vectorStatus !== 'processing' &&
+  !(field.originalSrc || field.src).startsWith('data:image/svg+xml')
+) {
           logosToProcess.push({
             cardId: card.id,
             side: 'back',
@@ -1800,15 +1864,68 @@ useEffect(() => {
   };
 
   const onLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      await addLogoFromSource(String(reader.result), file.name);
-    };
-    reader.readAsDataURL(file);
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const isSvg =
+    file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+
+  const reader = new FileReader();
+
+  reader.onload = async () => {
+    const src = String(reader.result);
+
+    if (isSvg) {
+      try {
+        const parsed = await parseSvgDataUrl(src);
+
+        const id = buildUniqueId('logo');
+
+        const svgLogo: LogoField = {
+          id,
+          type: 'logo',
+          label: file.name.toLowerCase().includes('screenshot')
+            ? 'Screenshot Logo'
+            : 'Logo',
+          src,
+          originalSrc: src,
+          exportSrc: src,
+          x: STAGE_W - 180,
+          y: 24,
+          width: 140,
+          height: 80,
+          filename: file.name,
+          removedBackground: true,
+          threshold: 235,
+          laserThreshold: 165,
+          laserMode: 'laser',
+          vectorStatus: 'ready',
+          vectorMarkup: parsed.vectorMarkup,
+          vectorWidth: parsed.vectorWidth,
+          vectorHeight: parsed.vectorHeight,
+        };
+
+        setFields((current) => [...current, svgLogo]);
+        setSelectedId(id);
+        setEditingTextId(null);
+        setContextMenu(null);
+      } catch (error) {
+        console.error(error);
+        setPasteMessage('SVG konnte nicht gelesen werden.');
+        window.setTimeout(() => setPasteMessage(''), 3000);
+      } finally {
+        event.target.value = '';
+      }
+
+      return;
+    }
+
+    await addLogoFromSource(src, file.name);
     event.target.value = '';
   };
+
+  reader.readAsDataURL(file);
+};
 
   const pointerPos = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -3222,24 +3339,43 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
       />
     )}
   </div>
+) : field.vectorMarkup && field.vectorWidth && field.vectorHeight ? (
+  <svg
+    width={field.width}
+    height={field.height}
+    viewBox={`0 0 ${field.vectorWidth} ${field.vectorHeight}`}
+    preserveAspectRatio="xMidYMid meet"
+    style={{
+      display: 'block',
+      width: '100%',
+      height: '100%',
+      opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
+      pointerEvents: 'none',
+    }}
+  >
+    <g
+      style={{ fill: previewTextColor }}
+      dangerouslySetInnerHTML={{ __html: field.vectorMarkup }}
+    />
+  </svg>
 ) : (
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                WebkitMaskImage: `url(${getDisplaySrc(field)})`,
-                WebkitMaskRepeat: 'no-repeat',
-                WebkitMaskSize: 'contain',
-                WebkitMaskPosition: 'center',
-                maskImage: `url(${getDisplaySrc(field)})`,
-                maskRepeat: 'no-repeat',
-                maskSize: 'contain',
-                maskPosition: 'center',
-                backgroundColor: previewTextColor,
-                opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
-              }}
-            />
-          )}
+  <div
+    style={{
+      width: '100%',
+      height: '100%',
+      WebkitMaskImage: `url(${getDisplaySrc(field)})`,
+      WebkitMaskRepeat: 'no-repeat',
+      WebkitMaskSize: 'contain',
+      WebkitMaskPosition: 'center',
+      maskImage: `url(${getDisplaySrc(field)})`,
+      maskRepeat: 'no-repeat',
+      maskSize: 'contain',
+      maskPosition: 'center',
+      backgroundColor: previewTextColor,
+      opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
+    }}
+  />
+)}
 
           {field.vectorStatus === 'processing' ? (
             <div
