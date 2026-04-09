@@ -692,6 +692,60 @@ function removeIsolatedPixels(mask: boolean[][], minNeighbors = 2) {
   return next;
 }
 
+function keepNonBorderComponents(mask: boolean[][], minArea = 20) {
+  const h = mask.length;
+  const w = mask[0]?.length || 0;
+  const visited = createBooleanMask(w, h, false);
+  const next = createBooleanMask(w, h, false);
+
+  const directions = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y][x] || visited[y][x]) continue;
+
+      const stack: Array<[number, number]> = [[x, y]];
+      const component: Array<[number, number]> = [];
+      let touchesBorder = false;
+
+      visited[y][x] = true;
+
+      while (stack.length > 0) {
+        const [cx, cy] = stack.pop()!;
+        component.push([cx, cy]);
+
+        if (cx === 0 || cy === 0 || cx === w - 1 || cy === h - 1) {
+          touchesBorder = true;
+        }
+
+        for (const [dx, dy] of directions) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          if (!mask[ny][nx] || visited[ny][nx]) continue;
+
+          visited[ny][nx] = true;
+          stack.push([nx, ny]);
+        }
+      }
+
+      if (!touchesBorder && component.length >= minArea) {
+        for (const [px, py] of component) {
+          next[py][px] = true;
+        }
+      }
+    }
+  }
+
+  return next;
+}
+
 function dilateMask(mask: boolean[][], radius = 1) {
   const h = mask.length;
   const w = mask[0]?.length || 0;
@@ -916,9 +970,10 @@ function maskFromImageData(
     }
   }
 
-  const cleaned = removeIsolatedPixels(mask, 2);
+    const cleaned = removeIsolatedPixels(mask, 2);
   const closed = closeMask(cleaned, 1);
-  return removeIsolatedPixels(closed, 2);
+  const withoutBorderNoise = keepNonBorderComponents(closed, 30);
+  return removeIsolatedPixels(withoutBorderNoise, 2);
 }
 
 
@@ -1541,7 +1596,7 @@ const holePx = product.hole
       }));
 
       const traced = await traceImageToVectorAsset(field.originalSrc || field.src, {
-  backgroundTolerance: 28,
+  backgroundTolerance: 48,
   minAlpha: 20,
   upscaleMinWidth: 1600,
   upscaleMinHeight: 900,
@@ -1801,7 +1856,7 @@ useEffect(() => {
         setIsProcessingImage(true);
 
         const traced = await traceImageToVectorAsset(src, {
-  backgroundTolerance: 28,
+  backgroundTolerance: 48,
   minAlpha: 20,
   upscaleMinWidth: 1600,
   upscaleMinHeight: 900,
