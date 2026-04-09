@@ -359,34 +359,50 @@ async function renderFieldsToCanvas(
   dimensions: {
     stageW: number;
     stageH: number;
+    scale?: number;
   },
   outputMode: OutputMode,
 ) {
   const { stageW, stageH } = dimensions;
+  const scale = dimensions.scale ?? 1;
+
+  if ('fonts' in document) {
+    try {
+      await (document as Document & {
+        fonts: FontFaceSet;
+      }).fonts.ready;
+    } catch {
+      // notfalls trotzdem weiter
+    }
+  }
 
   const canvas = document.createElement('canvas');
-  canvas.width = stageW;
-  canvas.height = stageH;
+  canvas.width = Math.round(stageW * scale);
+  canvas.height = Math.round(stageH * scale);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('Canvas-Kontext konnte nicht erstellt werden.');
   }
 
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, stageW, stageH);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   for (const field of fields) {
     if (field.type === 'multiline') {
       const lines = String(field.text || '').split('\n');
       const fontFamily =
         FONT_OPTIONS[field.fontFamily] || FONT_OPTIONS[DEFAULT_FONT_FAMILY];
+
       const fillStyle =
         outputMode === 'uv'
           ? field.color || '#000000'
           : DEFAULT_TEXT_COLOR;
 
       ctx.fillStyle = fillStyle;
-      ctx.font = `${field.fontWeight} ${field.fontSize}px ${fontFamily}`;
+      ctx.font = `${field.fontWeight} ${field.fontSize}px "${fontFamily}"`;
       ctx.textBaseline = 'alphabetic';
 
       if (field.align === 'center') {
@@ -414,12 +430,15 @@ async function renderFieldsToCanvas(
       const moduleSize = field.size / qrMatrix.length;
       const { offset, size } = getQrModuleRect(moduleSize);
 
-      const bg = outputMode === 'uv'
-        ? field.backgroundColor || '#ffffff'
-        : '#ffffff';
-      const fill = outputMode === 'uv'
-        ? field.color || '#000000'
-        : '#000000';
+      const bg =
+        outputMode === 'uv'
+          ? field.backgroundColor || '#ffffff'
+          : '#ffffff';
+
+      const fill =
+        outputMode === 'uv'
+          ? field.color || '#000000'
+          : '#000000';
 
       ctx.fillStyle = bg;
       roundRect(ctx, field.x, field.y, field.size, field.size, 8);
@@ -492,27 +511,15 @@ async function exportSidePngDataUrl(
 ) {
   const scale = dimensions.exportScale ?? 4;
 
-  const baseCanvas = await renderFieldsToCanvas(
+  const canvas = await renderFieldsToCanvas(
     fields,
     {
       stageW: dimensions.stageW,
       stageH: dimensions.stageH,
+      scale,
     },
     outputMode,
   );
-
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(dimensions.stageW * scale);
-  canvas.height = Math.round(dimensions.stageH * scale);
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Export-Canvas konnte nicht erstellt werden.');
-  }
-
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
 
   return canvas.toDataURL('image/png');
 }
