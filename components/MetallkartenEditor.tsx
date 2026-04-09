@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import { SelectionBadge } from '@/components/designer/SelectionBadge';
 import { Panel } from '@/components/designer/Panel';
 import { nfcChipProduct } from '@/lib/designer/products/nfc-chip';
+import opentype from 'opentype.js';
 
 import type {
   FontFamilyKey,
@@ -97,6 +98,57 @@ function escapeXml(str = '') {
 
 function escapeAttribute(str = '') {
   return escapeXml(str).replace(/\n/g, '&#10;');
+}
+
+let uvExportFontPromise: Promise<opentype.Font> | null = null;
+
+function loadArrayBuffer(url: string) {
+  return fetch(url).then((res) => {
+    if (!res.ok) {
+      throw new Error(`Font konnte nicht geladen werden: ${url}`);
+    }
+    return res.arrayBuffer();
+  });
+}
+
+function getUvExportFont() {
+  if (!uvExportFontPromise) {
+    uvExportFontPromise = loadArrayBuffer('/fonts/arial.ttf').then((buffer) =>
+      opentype.parse(buffer),
+    );
+  }
+
+  return uvExportFontPromise;
+}
+
+async function textToSvgPath(field: TextField, outputMode: OutputMode) {
+  if (outputMode !== 'uv') {
+    return textToSvg(field);
+  }
+
+  const font = await getUvExportFont();
+  const lines = String(field.text || '').split('\n');
+  const fill = field.color || DEFAULT_TEXT_COLOR;
+
+  return lines
+    .map((line, index) => {
+      const y = field.y + index * (field.fontSize * 1.35) + field.fontSize;
+
+      let x = field.x;
+      if (field.align === 'center') {
+        const width = font.getAdvanceWidth(line, field.fontSize);
+        x = field.x - width / 2;
+      } else if (field.align === 'right') {
+        const width = font.getAdvanceWidth(line, field.fontSize);
+        x = field.x - width;
+      }
+
+      const path = font.getPath(line, x, y, field.fontSize);
+      const d = path.toPathData(2);
+
+      return `<path d="${escapeAttribute(d)}" fill="${escapeAttribute(fill)}" />`;
+    })
+    .join('');
 }
 
 function cloneFields(fields: Field[]): Field[] {
@@ -356,7 +408,7 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
 
 
 
-function exportSideSvg(
+async function exportSideSvg(
   fields: PreparedField[],
   includeGuide: boolean,
   meta: { orderNumber: string; side: Side; cardName: string; cardFinish: CardFinishKey },
@@ -371,14 +423,16 @@ function exportSideSvg(
 ) {
   const { cardWidth, cardHeight, stageW, stageH, safeMargin } = dimensions;
 
-  const content = fields
-    .map((field) => {
-      if (field.type === 'multiline') return textToSvg(field);
+  const content = (
+  await Promise.all(
+    fields.map(async (field) => {
+      if (field.type === 'multiline') return textToSvgPath(field, outputMode);
       if (field.type === 'qr') return qrSvgGroup(field, outputMode);
       if (field.type === 'logo') return logoToSvg(field, outputMode, meta.cardFinish);
       return '';
-    })
-    .join('\n');
+    }),
+  )
+).join('\n');
 
   const guide = includeGuide
     ? `
@@ -2196,7 +2250,7 @@ updateField(selected.id, {
 
        const safeCardName = sanitizeOrderNumber(card.name) || 'metallkarte';
 
-const frontSvg = exportSideSvg(
+const frontSvg = await exportSideSvg(
   preparedFront,
   true,
   {
@@ -2215,7 +2269,7 @@ const frontSvg = exportSideSvg(
   },
 );
 
-const backSvg = exportSideSvg(
+const backSvg = await exportSideSvg(
   preparedBack,
   true,
   {
