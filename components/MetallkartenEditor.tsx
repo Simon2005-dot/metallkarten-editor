@@ -100,19 +100,34 @@ function escapeAttribute(str = '') {
   return escapeXml(str).replace(/\n/g, '&#10;');
 }
 
-const UV_EXPORT_FONT_FILES: Partial<Record<FontFamilyKey, string>> = {
+const UV_EXPORT_FONT_FILES: Record<string, string> = {
   arial: '/fonts/arial.ttf',
   helvetica: '/fonts/arial.ttf',
 
   times: '/fonts/noto-serif.ttf',
+  timesnewroman: '/fonts/noto-serif.ttf',
+  'times-new-roman': '/fonts/noto-serif.ttf',
+  timesnewromanregular: '/fonts/noto-serif.ttf',
   georgia: '/fonts/noto-serif.ttf',
 
   verdana: '/fonts/roboto.ttf',
   tahoma: '/fonts/roboto.ttf',
   trebuchet: '/fonts/roboto.ttf',
+  trebuchetms: '/fonts/roboto.ttf',
+  'trebuchet-ms': '/fonts/roboto.ttf',
 
   courier: '/fonts/roboto.ttf',
+  couriernew: '/fonts/roboto.ttf',
+  'courier-new': '/fonts/roboto.ttf',
 };
+
+function normalizeFontKey(value: string) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9-]/g, '');
+}
 
 const uvExportFontPromises = new Map<string, Promise<opentype.Font>>();
 
@@ -126,13 +141,15 @@ function loadArrayBuffer(url: string) {
 }
 
 function getUvExportFont(fontFamily: FontFamilyKey) {
-  const fontUrl =
-    UV_EXPORT_FONT_FILES[fontFamily] ||
-    UV_EXPORT_FONT_FILES[DEFAULT_FONT_FAMILY];
+  const rawKey = String(fontFamily);
+  const normalizedKey = normalizeFontKey(rawKey);
 
-  if (!fontUrl) {
-    throw new Error(`Keine Export-Fontdatei für "${fontFamily}" hinterlegt.`);
-  }
+  const fontUrl =
+    UV_EXPORT_FONT_FILES[rawKey] ||
+    UV_EXPORT_FONT_FILES[normalizedKey] ||
+    UV_EXPORT_FONT_FILES[String(DEFAULT_FONT_FAMILY)] ||
+    UV_EXPORT_FONT_FILES[normalizeFontKey(String(DEFAULT_FONT_FAMILY))] ||
+    '/fonts/arial.ttf';
 
   if (!uvExportFontPromises.has(fontUrl)) {
     uvExportFontPromises.set(
@@ -330,7 +347,7 @@ function logoToSvg(
     imageSrc.startsWith('data:image/svg+xml') ||
     field.filename.toLowerCase().endsWith('.svg');
 
-  if (
+    if (
     field.label === 'NFC Symbol' &&
     field.vectorMarkup &&
     field.vectorWidth &&
@@ -340,10 +357,15 @@ function logoToSvg(
     const scaleY = field.height / field.vectorHeight;
     const fill = field.color || '#000000';
 
+    const forcedMarkup = field.vectorMarkup
+      .replace(/\sfill="[^"]*"/gi, '')
+      .replace(/\sstroke="[^"]*"/gi, '')
+      .replace(/\scolor="[^"]*"/gi, '');
+
     return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="${escapeAttribute(
       fill,
     )}" color="${escapeAttribute(fill)}" stroke="none">
-      ${field.vectorMarkup}
+      ${forcedMarkup}
     </g>`;
   }
 
