@@ -374,9 +374,9 @@ function logoToSvg(
   const scaleX = field.width / field.vectorWidth;
   const scaleY = field.height / field.vectorHeight;
 
-  return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="#000000" stroke="none">
-    ${field.vectorMarkup}
-  </g>`;
+  return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="#000000" color="#000000" stroke="none">
+  ${field.vectorMarkup}
+</g>`;
 }
 
 function ensureBlackText(fields: Field[], outputMode: OutputMode) {
@@ -1216,7 +1216,7 @@ const transparentPreviewSrc = previewCanvas.toDataURL('image/png');
 
   const vectorWidth = Math.max(1, cropped.width);
   const vectorHeight = Math.max(1, cropped.height);
-  const vectorMarkup = `<path d="${path}" fill="#000000" fill-rule="evenodd" />`;
+ const vectorMarkup = `<path d="${path}" fill="currentColor" fill-rule="evenodd" />`;
 
   const previewSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vectorWidth} ${vectorHeight}">
@@ -3353,10 +3353,22 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
       pointerEvents: 'none',
     }}
   >
-    <g
-      style={{ fill: previewTextColor }}
-      dangerouslySetInnerHTML={{ __html: field.vectorMarkup }}
-    />
+    <svg
+  width={field.width}
+  height={field.height}
+  viewBox={`0 0 ${field.vectorWidth} ${field.vectorHeight}`}
+  preserveAspectRatio="xMidYMid meet"
+  style={{
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
+    pointerEvents: 'none',
+    color: previewTextColor,
+  }}
+>
+  <g dangerouslySetInnerHTML={{ __html: field.vectorMarkup }} />
+</svg>
   </svg>
 ) : (
   <div
