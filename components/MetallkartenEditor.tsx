@@ -3273,7 +3273,7 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
           style={{
             position: 'absolute',
             cursor: 'move',
-            overflow: 'visible',
+            overflow: 'hidden',
             outline: isSelected ? '2px solid #4f46e5' : 'none',
             outlineOffset: 2,
             left: field.x,
@@ -3397,6 +3397,24 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
       />
     )}
   </div>
+) : (field.originalSrc || field.src).startsWith('data:image/svg+xml') ? (
+  <div
+    style={{
+      width: '100%',
+      height: '100%',
+      WebkitMaskImage: `url(${field.originalSrc || field.src})`,
+      WebkitMaskRepeat: 'no-repeat',
+      WebkitMaskSize: 'contain',
+      WebkitMaskPosition: 'center',
+      maskImage: `url(${field.originalSrc || field.src})`,
+      maskRepeat: 'no-repeat',
+      maskSize: 'contain',
+      maskPosition: 'center',
+      backgroundColor: previewTextColor,
+      opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
+      pointerEvents: 'none',
+    }}
+  />
 ) : field.vectorMarkup && field.vectorWidth && field.vectorHeight ? (
   <svg
     width={field.width}
@@ -3409,25 +3427,10 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
       height: '100%',
       opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
       pointerEvents: 'none',
+      color: previewTextColor,
     }}
   >
-    <svg
-  width={field.width}
-  height={field.height}
-  viewBox={`0 0 ${field.vectorWidth} ${field.vectorHeight}`}
-  preserveAspectRatio="xMidYMid meet"
-  style={{
-    display: 'block',
-    width: '100%',
-    height: '100%',
-    opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
-    pointerEvents: 'none',
-    color: previewTextColor,
-    overflow: 'visible',
-  }}
->
-  <g dangerouslySetInnerHTML={{ __html: field.vectorMarkup }} />
-</svg>
+    <g dangerouslySetInnerHTML={{ __html: field.vectorMarkup }} />
   </svg>
 ) : (
   <div
