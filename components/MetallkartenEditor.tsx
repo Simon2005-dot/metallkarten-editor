@@ -345,6 +345,179 @@ async function prepareFieldsForExport(
   );
 }
 
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function renderFieldsToCanvas(
+  fields: PreparedField[],
+  dimensions: {
+    stageW: number;
+    stageH: number;
+  },
+  outputMode: OutputMode,
+) {
+  const { stageW, stageH } = dimensions;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = stageW;
+  canvas.height = stageH;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Canvas-Kontext konnte nicht erstellt werden.');
+  }
+
+  ctx.clearRect(0, 0, stageW, stageH);
+
+  for (const field of fields) {
+    if (field.type === 'multiline') {
+      const lines = String(field.text || '').split('\n');
+      const fontFamily =
+        FONT_OPTIONS[field.fontFamily] || FONT_OPTIONS[DEFAULT_FONT_FAMILY];
+      const fillStyle =
+        outputMode === 'uv'
+          ? field.color || '#000000'
+          : DEFAULT_TEXT_COLOR;
+
+      ctx.fillStyle = fillStyle;
+      ctx.font = `${field.fontWeight} ${field.fontSize}px ${fontFamily}`;
+      ctx.textBaseline = 'alphabetic';
+
+      if (field.align === 'center') {
+        ctx.textAlign = 'center';
+      } else if (field.align === 'right') {
+        ctx.textAlign = 'right';
+      } else {
+        ctx.textAlign = 'left';
+      }
+
+      lines.forEach((line, index) => {
+        const y = field.y + index * (field.fontSize * 1.35) + field.fontSize;
+        ctx.fillText(line, field.x, y);
+      });
+
+      continue;
+    }
+
+    if (field.type === 'qr') {
+      const qrMatrix =
+        field.qrMatrix && field.qrMatrix.length > 0
+          ? field.qrMatrix
+          : fallbackQrMatrix(field.text || 'placeholder');
+
+      const moduleSize = field.size / qrMatrix.length;
+      const { offset, size } = getQrModuleRect(moduleSize);
+
+      const bg = outputMode === 'uv'
+        ? field.backgroundColor || '#ffffff'
+        : '#ffffff';
+      const fill = outputMode === 'uv'
+        ? field.color || '#000000'
+        : '#000000';
+
+      ctx.fillStyle = bg;
+      roundRect(ctx, field.x, field.y, field.size, field.size, 8);
+      ctx.fill();
+
+      ctx.fillStyle = fill;
+      qrMatrix.forEach((row, y) => {
+        row.forEach((cell, x) => {
+          if (!cell) return;
+          ctx.fillRect(
+            field.x + x * moduleSize + offset,
+            field.y + y * moduleSize + offset,
+            size,
+            size,
+          );
+        });
+      });
+
+      continue;
+    }
+
+    if (field.type === 'logo') {
+      const imageSrc = field.exportSrc || field.originalSrc || field.src;
+      const img = await loadImage(imageSrc);
+
+      if (outputMode === 'uv' && field.label === 'NFC Symbol') {
+        ctx.save();
+        ctx.drawImage(img, field.x, field.y, field.width, field.height);
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = field.color || '#000000';
+        ctx.fillRect(field.x, field.y, field.width, field.height);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, field.x, field.y, field.width, field.height);
+      }
+
+      continue;
+    }
+  }
+
+  return canvas;
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+async function exportSidePngDataUrl(
+  fields: PreparedField[],
+  outputMode: OutputMode,
+  dimensions: {
+    stageW: number;
+    stageH: number;
+    exportScale?: number;
+  },
+) {
+  const scale = dimensions.exportScale ?? 4;
+
+  const baseCanvas = await renderFieldsToCanvas(
+    fields,
+    {
+      stageW: dimensions.stageW,
+      stageH: dimensions.stageH,
+    },
+    outputMode,
+  );
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(dimensions.stageW * scale);
+  canvas.height = Math.round(dimensions.stageH * scale);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Export-Canvas konnte nicht erstellt werden.');
+  }
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(baseCanvas, 0, 0, canvas.width, canvas.height);
+
+  return canvas.toDataURL('image/png');
+}
+
+
 function exportSideSvg(
   fields: PreparedField[],
   includeGuide: boolean,
@@ -2185,54 +2358,91 @@ updateField(selected.id, {
 
         const safeCardName = sanitizeOrderNumber(card.name) || 'metallkarte';
 
-const frontSvg = exportSideSvg(
-  preparedFront,
-  true,
-  {
-  orderNumber: cleanOrderNumber,
-  side: 'front',
-  cardName: card.name,
-  cardFinish: card.cardFinish,
-},
-  outputMode,
-  {
-    cardWidth: CARD_WIDTH,
-    cardHeight: CARD_HEIGHT,
-    stageW: STAGE_W,
-    stageH: STAGE_H,
-    safeMargin: SAFE_MARGIN,
-  },
-);
+if (outputMode === 'uv') {
+  const [frontPngDataUrl, backPngDataUrl] = await Promise.all([
+    exportSidePngDataUrl(preparedFront, outputMode, {
+      stageW: STAGE_W,
+      stageH: STAGE_H,
+      exportScale: 4,
+    }),
+    exportSidePngDataUrl(preparedBack, outputMode, {
+      stageW: STAGE_W,
+      stageH: STAGE_H,
+      exportScale: 4,
+    }),
+  ]);
 
-const backSvg = exportSideSvg(
-  preparedBack,
-  true,
-  {
-  orderNumber: cleanOrderNumber,
-  side: 'back',
-  cardName: card.name,
-  cardFinish: card.cardFinish,
-},
-  outputMode,
-  {
-    cardWidth: CARD_WIDTH,
-    cardHeight: CARD_HEIGHT,
-    stageW: STAGE_W,
-    stageH: STAGE_H,
-    safeMargin: SAFE_MARGIN,
-  },
-);
-        if (
-  outputMode === 'laser' &&
-  (frontSvg.includes('<image') || backSvg.includes('<image'))
-) {
-  throw new Error(
-    'Export enthält noch Rasterbilder (<image>). Bitte alle Logos/Screenshots vollständig vektorisieren.',
+  const frontBase64 = frontPngDataUrl.split(',')[1];
+  const backBase64 = backPngDataUrl.split(',')[1];
+
+  zip.file(
+    `${rootFolder}/${safeCardName}/${safeCardName}-vorderseite-uv.png`,
+    frontBase64,
+    { base64: true },
+  );
+
+  zip.file(
+    `${rootFolder}/${safeCardName}/${safeCardName}-rueckseite-uv.png`,
+    backBase64,
+    { base64: true },
+  );
+} else {
+  const frontSvg = exportSideSvg(
+    preparedFront,
+    true,
+    {
+      orderNumber: cleanOrderNumber,
+      side: 'front',
+      cardName: card.name,
+      cardFinish: card.cardFinish,
+    },
+    outputMode,
+    {
+      cardWidth: CARD_WIDTH,
+      cardHeight: CARD_HEIGHT,
+      stageW: STAGE_W,
+      stageH: STAGE_H,
+      safeMargin: SAFE_MARGIN,
+    },
+  );
+
+  const backSvg = exportSideSvg(
+    preparedBack,
+    true,
+    {
+      orderNumber: cleanOrderNumber,
+      side: 'back',
+      cardName: card.name,
+      cardFinish: card.cardFinish,
+    },
+    outputMode,
+    {
+      cardWidth: CARD_WIDTH,
+      cardHeight: CARD_HEIGHT,
+      stageW: STAGE_W,
+      stageH: STAGE_H,
+      safeMargin: SAFE_MARGIN,
+    },
+  );
+
+  if (
+    outputMode === 'laser' &&
+    (frontSvg.includes('<image') || backSvg.includes('<image'))
+  ) {
+    throw new Error(
+      'Export enthält noch Rasterbilder (<image>). Bitte alle Logos/Screenshots vollständig vektorisieren.',
+    );
+  }
+
+  zip.file(
+    `${rootFolder}/${safeCardName}/${safeCardName}-vorderseite-laser.svg`,
+    frontSvg,
+  );
+  zip.file(
+    `${rootFolder}/${safeCardName}/${safeCardName}-rueckseite-laser.svg`,
+    backSvg,
   );
 }
-
-       zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-vorderseite-${outputMode}.svg`, frontSvg);
-zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-rueckseite-${outputMode}.svg`, backSvg);
       }
 
       const blob = await zip.generateAsync({ type: 'blob' });
