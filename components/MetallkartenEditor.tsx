@@ -251,18 +251,32 @@ function logoToSvg(
 ) {
   if (outputMode === 'uv') {
   const imageSrc = field.exportSrc || field.originalSrc || field.src;
+  const isSvgSource =
+    imageSrc.startsWith('data:image/svg+xml') ||
+    field.filename.toLowerCase().endsWith('.svg');
 
-  if (field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
+  if (
+    field.label === 'NFC Symbol' &&
+    field.vectorMarkup &&
+    field.vectorWidth &&
+    field.vectorHeight
+  ) {
     const scaleX = field.width / field.vectorWidth;
     const scaleY = field.height / field.vectorHeight;
-    const fill =
-      field.label === 'NFC Symbol'
-        ? field.color || '#000000'
-        : '#000000';
+    const fill = field.color || '#000000';
 
     return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="${escapeAttribute(
       fill,
     )}" color="${escapeAttribute(fill)}" stroke="none">
+      ${field.vectorMarkup}
+    </g>`;
+  }
+
+  if (isSvgSource && field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
+    const scaleX = field.width / field.vectorWidth;
+    const scaleY = field.height / field.vectorHeight;
+
+    return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" stroke="none">
       ${field.vectorMarkup}
     </g>`;
   }
