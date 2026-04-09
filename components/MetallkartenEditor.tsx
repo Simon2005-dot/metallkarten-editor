@@ -100,7 +100,21 @@ function escapeAttribute(str = '') {
   return escapeXml(str).replace(/\n/g, '&#10;');
 }
 
-let uvExportFontPromise: Promise<opentype.Font> | null = null;
+const UV_EXPORT_FONT_FILES: Partial<Record<FontFamilyKey, string>> = {
+  arial: '/fonts/arial.ttf',
+  helvetica: '/fonts/arial.ttf',
+
+  times: '/fonts/noto-serif.ttf',
+  georgia: '/fonts/noto-serif.ttf',
+
+  verdana: '/fonts/roboto.ttf',
+  tahoma: '/fonts/roboto.ttf',
+  trebuchet: '/fonts/roboto.ttf',
+
+  courier: '/fonts/roboto.ttf',
+};
+
+const uvExportFontPromises = new Map<string, Promise<opentype.Font>>();
 
 function loadArrayBuffer(url: string) {
   return fetch(url).then((res) => {
@@ -111,14 +125,23 @@ function loadArrayBuffer(url: string) {
   });
 }
 
-function getUvExportFont() {
-  if (!uvExportFontPromise) {
-    uvExportFontPromise = loadArrayBuffer('/fonts/arial.ttf').then((buffer) =>
-      opentype.parse(buffer),
+function getUvExportFont(fontFamily: FontFamilyKey) {
+  const fontUrl =
+    UV_EXPORT_FONT_FILES[fontFamily] ||
+    UV_EXPORT_FONT_FILES[DEFAULT_FONT_FAMILY];
+
+  if (!fontUrl) {
+    throw new Error(`Keine Export-Fontdatei für "${fontFamily}" hinterlegt.`);
+  }
+
+  if (!uvExportFontPromises.has(fontUrl)) {
+    uvExportFontPromises.set(
+      fontUrl,
+      loadArrayBuffer(fontUrl).then((buffer) => opentype.parse(buffer)),
     );
   }
 
-  return uvExportFontPromise;
+  return uvExportFontPromises.get(fontUrl)!;
 }
 
 async function textToSvgPath(field: TextField, outputMode: OutputMode) {
@@ -126,7 +149,7 @@ async function textToSvgPath(field: TextField, outputMode: OutputMode) {
     return textToSvg(field);
   }
 
-  const font = await getUvExportFont();
+  const font = await getUvExportFont(field.fontFamily);
   const lines = String(field.text || '').split('\n');
   const fill = field.color || DEFAULT_TEXT_COLOR;
 
@@ -382,7 +405,33 @@ async function prepareFieldsForExport(
 ): Promise<PreparedField[]> {
   return Promise.all(
     ensureBlackText(fields, outputMode).map(async (field) => {
-      if (field.type === 'logo') {
+            if (field.type === 'logo') {
+        if (
+          outputMode === 'uv' &&
+          field.label === 'NFC Symbol' &&
+          (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight)
+        ) {
+          try {
+            const traced = await traceImageToVectorAsset(field.originalSrc || field.src, {
+              backgroundTolerance: 48,
+              minAlpha: 20,
+              upscaleMinWidth: 1600,
+              upscaleMinHeight: 900,
+              upscaleMaxScale: 4,
+              contrast: 40,
+            });
+
+            return {
+              ...field,
+              vectorMarkup: traced.vectorMarkup,
+              vectorWidth: traced.vectorWidth,
+              vectorHeight: traced.vectorHeight,
+            };
+          } catch {
+            return field;
+          }
+        }
+
         return field;
       }
 
