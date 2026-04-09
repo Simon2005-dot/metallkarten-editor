@@ -250,122 +250,33 @@ function logoToSvg(
   cardFinish?: CardFinishKey,
 ) {
   if (outputMode === 'uv') {
-    const imageSrc = field.exportSrc || field.originalSrc || field.src;
+  const imageSrc = field.exportSrc || field.originalSrc || field.src;
 
-    if (field.label === 'NFC Symbol') {
-      const fill = field.color || '#000000';
+  if (field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
+    const scaleX = field.width / field.vectorWidth;
+    const scaleY = field.height / field.vectorHeight;
+    const fill =
+      field.label === 'NFC Symbol'
+        ? field.color || '#000000'
+        : '#000000';
 
-      return `<svg
-        x="${field.x}"
-        y="${field.y}"
-        width="${field.width}"
-        height="${field.height}"
-        viewBox="0 0 ${field.width} ${field.height}"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <defs>
-          <mask id="mask-${escapeAttribute(field.id)}">
-            <image
-              x="0"
-              y="0"
-              width="${field.width}"
-              height="${field.height}"
-              preserveAspectRatio="xMidYMid meet"
-              href="${escapeAttribute(imageSrc)}"
-            />
-          </mask>
-        </defs>
-        <rect
-          x="0"
-          y="0"
-          width="${field.width}"
-          height="${field.height}"
-          fill="${escapeAttribute(fill)}"
-          mask="url(#mask-${escapeAttribute(field.id)})"
-        />
-      </svg>`;
-    }
-
-    const shouldOutline = false;
-    const outlineOffset = 0;
-
-    if (!shouldOutline) {
-      return `<image
-        x="${field.x}"
-        y="${field.y}"
-        width="${field.width}"
-        height="${field.height}"
-        preserveAspectRatio="xMidYMid meet"
-        href="${escapeAttribute(imageSrc)}"
-      />`;
-    }
-
-    const maskId = `mask-${escapeAttribute(field.id)}`;
-
-    return `<svg
-      x="${field.x - outlineOffset}"
-      y="${field.y - outlineOffset}"
-      width="${field.width + outlineOffset * 2}"
-      height="${field.height + outlineOffset * 2}"
-      viewBox="0 0 ${field.width + outlineOffset * 2} ${field.height + outlineOffset * 2}"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <mask id="${maskId}">
-          <image
-            x="${outlineOffset}"
-            y="${outlineOffset}"
-            width="${field.width}"
-            height="${field.height}"
-            preserveAspectRatio="xMidYMid meet"
-            href="${escapeAttribute(imageSrc)}"
-          />
-        </mask>
-      </defs>
-
-      <rect
-        x="0"
-        y="${outlineOffset}"
-        width="${field.width}"
-        height="${field.height}"
-        fill="#ffffff"
-        mask="url(#${maskId})"
-      />
-      <rect
-        x="${outlineOffset * 2}"
-        y="${outlineOffset}"
-        width="${field.width}"
-        height="${field.height}"
-        fill="#ffffff"
-        mask="url(#${maskId})"
-      />
-      <rect
-        x="${outlineOffset}"
-        y="0"
-        width="${field.width}"
-        height="${field.height}"
-        fill="#ffffff"
-        mask="url(#${maskId})"
-      />
-      <rect
-        x="${outlineOffset}"
-        y="${outlineOffset * 2}"
-        width="${field.width}"
-        height="${field.height}"
-        fill="#ffffff"
-        mask="url(#${maskId})"
-      />
-
-      <image
-        x="${outlineOffset}"
-        y="${outlineOffset}"
-        width="${field.width}"
-        height="${field.height}"
-        preserveAspectRatio="xMidYMid meet"
-        href="${escapeAttribute(imageSrc)}"
-      />
-    </svg>`;
+    return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="${escapeAttribute(
+      fill,
+    )}" color="${escapeAttribute(fill)}" stroke="none">
+      ${field.vectorMarkup}
+    </g>`;
   }
+
+  return `<image
+    x="${field.x}"
+    y="${field.y}"
+    width="${field.width}"
+    height="${field.height}"
+    preserveAspectRatio="xMidYMid meet"
+    href="${escapeAttribute(imageSrc)}"
+    xlink:href="${escapeAttribute(imageSrc)}"
+  />`;
+}
 
   if (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight) {
     throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
