@@ -1153,6 +1153,7 @@ async function parseSvgDataUrl(dataUrl: string): Promise<{
   if (dataUrl.startsWith('data:image/svg+xml')) {
     const [, payload = ''] = dataUrl.split(',', 2);
     const isBase64 = dataUrl.includes(';base64');
+
     svgText = isBase64 ? atob(payload) : decodeURIComponent(payload);
   } else {
     throw new Error('Ungültige SVG-Datenquelle.');
@@ -1166,52 +1167,32 @@ async function parseSvgDataUrl(dataUrl: string): Promise<{
     throw new Error('SVG konnte nicht gelesen werden.');
   }
 
-  const measureWrap = document.createElement('div');
-  measureWrap.style.position = 'absolute';
-  measureWrap.style.left = '-99999px';
-  measureWrap.style.top = '-99999px';
-  measureWrap.style.width = '0';
-  measureWrap.style.height = '0';
-  measureWrap.style.overflow = 'hidden';
+  const viewBox = svg.getAttribute('viewBox');
+  let vectorWidth = 100;
+  let vectorHeight = 100;
 
-  const measureSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  measureSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-
-  const originalViewBox = svg.getAttribute('viewBox');
-  if (originalViewBox) {
-    measureSvg.setAttribute('viewBox', originalViewBox);
-  }
-
-  const widthAttr = svg.getAttribute('width');
-  const heightAttr = svg.getAttribute('height');
-  if (widthAttr) measureSvg.setAttribute('width', widthAttr);
-  if (heightAttr) measureSvg.setAttribute('height', heightAttr);
-
-  measureSvg.innerHTML = svg.innerHTML;
-  measureWrap.appendChild(measureSvg);
-  document.body.appendChild(measureWrap);
-
-  try {
-    const bbox = measureSvg.getBBox();
-
-    if (!bbox || bbox.width <= 0 || bbox.height <= 0) {
-      throw new Error('SVG-Inhalt konnte nicht vermessen werden.');
+  if (viewBox) {
+    const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+    if (parts.length === 4) {
+      vectorWidth = parts[2] || vectorWidth;
+      vectorHeight = parts[3] || vectorHeight;
     }
+  } else {
+    const widthAttr = svg.getAttribute('width') || '';
+    const heightAttr = svg.getAttribute('height') || '';
 
-    const padding = 1;
-    const minX = bbox.x - padding;
-    const minY = bbox.y - padding;
-    const width = bbox.width + padding * 2;
-    const height = bbox.height + padding * 2;
+    const parsedWidth = Number(widthAttr.replace(/[^\d.]/g, ''));
+    const parsedHeight = Number(heightAttr.replace(/[^\d.]/g, ''));
 
-    return {
-      vectorMarkup: `<g transform="translate(${-minX} ${-minY})">${svg.innerHTML}</g>`,
-      vectorWidth: width,
-      vectorHeight: height,
-    };
-  } finally {
-    document.body.removeChild(measureWrap);
+    if (Number.isFinite(parsedWidth) && parsedWidth > 0) vectorWidth = parsedWidth;
+    if (Number.isFinite(parsedHeight) && parsedHeight > 0) vectorHeight = parsedHeight;
   }
+
+  return {
+    vectorMarkup: svg.innerHTML,
+    vectorWidth,
+    vectorHeight,
+  };
 }
 
 
@@ -3285,7 +3266,7 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
           style={{
             position: 'absolute',
             cursor: 'move',
-            overflow: 'hidden',
+            overflow: 'visible',
             outline: isSelected ? '2px solid #4f46e5' : 'none',
             outlineOffset: 2,
             left: field.x,
@@ -3435,6 +3416,7 @@ Vorschau · {activeCard.name} · Modus: {outputMode === 'laser' ? 'Laser' : 'UV-
     opacity: field.vectorStatus === 'processing' ? 0.6 : 1,
     pointerEvents: 'none',
     color: previewTextColor,
+    overflow: 'visible',
   }}
 >
   <g dangerouslySetInnerHTML={{ __html: field.vectorMarkup }} />
