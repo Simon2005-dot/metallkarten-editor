@@ -1153,7 +1153,6 @@ async function parseSvgDataUrl(dataUrl: string): Promise<{
   if (dataUrl.startsWith('data:image/svg+xml')) {
     const [, payload = ''] = dataUrl.split(',', 2);
     const isBase64 = dataUrl.includes(';base64');
-
     svgText = isBase64 ? atob(payload) : decodeURIComponent(payload);
   } else {
     throw new Error('Ungültige SVG-Datenquelle.');
@@ -1168,12 +1167,17 @@ async function parseSvgDataUrl(dataUrl: string): Promise<{
   }
 
   const viewBox = svg.getAttribute('viewBox');
+  let minX = 0;
+  let minY = 0;
   let vectorWidth = 100;
   let vectorHeight = 100;
 
   if (viewBox) {
     const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+
     if (parts.length === 4) {
+      minX = parts[0] || 0;
+      minY = parts[1] || 0;
       vectorWidth = parts[2] || vectorWidth;
       vectorHeight = parts[3] || vectorHeight;
     }
@@ -1189,7 +1193,10 @@ async function parseSvgDataUrl(dataUrl: string): Promise<{
   }
 
   return {
-    vectorMarkup: svg.innerHTML,
+    vectorMarkup:
+      minX !== 0 || minY !== 0
+        ? `<g transform="translate(${-minX} ${-minY})">${svg.innerHTML}</g>`
+        : svg.innerHTML,
     vectorWidth,
     vectorHeight,
   };
