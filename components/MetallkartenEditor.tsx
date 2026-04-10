@@ -348,35 +348,46 @@ function logoToSvg(
     field.filename.toLowerCase().endsWith('.svg');
 
     if (
-    field.label === 'NFC Symbol' &&
-    field.vectorMarkup &&
-    field.vectorWidth &&
-    field.vectorHeight
-  ) {
-    const scaleX = field.width / field.vectorWidth;
-    const scaleY = field.height / field.vectorHeight;
-    const fill = field.color || '#000000';
+  field.label === 'NFC Symbol' &&
+  field.vectorMarkup &&
+  field.vectorWidth &&
+  field.vectorHeight
+) {
+  const scaleX = field.width / field.vectorWidth;
+  const scaleY = field.height / field.vectorHeight;
+  const color = field.color || '#000000';
 
-    const forcedMarkup = field.vectorMarkup
-      .replace(/\sfill="[^"]*"/gi, '')
-      .replace(/\sstroke="[^"]*"/gi, '')
-      .replace(/\scolor="[^"]*"/gi, '');
+  const forcedMarkup = field.vectorMarkup
+    .replace(/\sfill="[^"]*"/gi, '')
+    .replace(/\sstroke="[^"]*"/gi, '')
+    .replace(/\sstroke-width="[^"]*"/gi, '')
+    .replace(/\scolor="[^"]*"/gi, '');
 
-    return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="${escapeAttribute(
-      fill,
-    )}" color="${escapeAttribute(fill)}" stroke="none">
-      ${forcedMarkup}
-    </g>`;
-  }
+  return `<g
+    transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})"
+    fill="${escapeAttribute(color)}"
+    stroke="${escapeAttribute(color)}"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    color="${escapeAttribute(color)}"
+  >
+    ${forcedMarkup}
+  </g>`;
+}
 
   if (isSvgSource && field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
-    const scaleX = field.width / field.vectorWidth;
-    const scaleY = field.height / field.vectorHeight;
+  const scaleX = field.width / field.vectorWidth;
+  const scaleY = field.height / field.vectorHeight;
 
-    return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" stroke="none">
-      ${field.vectorMarkup}
-    </g>`;
-  }
+  return `<g
+    transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    ${field.vectorMarkup}
+  </g>`;
+}
 
   return `<image
     x="${field.x}"
