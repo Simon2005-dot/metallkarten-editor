@@ -357,22 +357,13 @@ function logoToSvg(
   const scaleY = field.height / field.vectorHeight;
   const color = field.color || '#000000';
 
-  const forcedMarkup = field.vectorMarkup
-    .replace(/\sfill="[^"]*"/gi, '')
-    .replace(/\sstroke="[^"]*"/gi, '')
-    .replace(/\sstroke-width="[^"]*"/gi, '')
-    .replace(/\scolor="[^"]*"/gi, '');
-
   return `<g
     transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})"
     fill="${escapeAttribute(color)}"
     stroke="${escapeAttribute(color)}"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
     color="${escapeAttribute(color)}"
   >
-    ${forcedMarkup}
+    ${field.vectorMarkup}
   </g>`;
 }
 
