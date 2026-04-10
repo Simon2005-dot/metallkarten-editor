@@ -2323,7 +2323,7 @@ updateField(selected.id, {
 
 const frontSvg = await exportSideSvg(
   preparedFront,
-  true,
+  false,
   {
     orderNumber: cleanOrderNumber,
     side: 'front',
@@ -2342,7 +2342,7 @@ const frontSvg = await exportSideSvg(
 
 const backSvg = await exportSideSvg(
   preparedBack,
-  true,
+  false,
   {
     orderNumber: cleanOrderNumber,
     side: 'back',
