@@ -342,15 +342,43 @@ function logoToSvg(
   cardFinish?: CardFinishKey,
 ) {
   if (outputMode === 'uv') {
-  const imageSrc = field.exportSrc || field.originalSrc || field.src;
-  const isSvgSource =
-    imageSrc.startsWith('data:image/svg+xml') ||
-    field.filename.toLowerCase().endsWith('.svg');
+    const imageSrc = field.exportSrc || field.originalSrc || field.src;
+    const isSvgSource =
+      imageSrc.startsWith('data:image/svg+xml') ||
+      field.filename.toLowerCase().endsWith('.svg');
 
-  if (field.label === 'NFC Symbol') {
-  const imageSrc = field.originalSrc || field.src;
+    if (
+      field.label === 'NFC Symbol' &&
+      field.vectorMarkup &&
+      field.vectorWidth &&
+      field.vectorHeight
+    ) {
+      const scaleX = field.width / field.vectorWidth;
+      const scaleY = field.height / field.vectorHeight;
+      const fill = field.color || '#000000';
 
-  return `<image
+      const forcedMarkup = field.vectorMarkup
+        .replace(/\sfill="[^"]*"/gi, '')
+        .replace(/\sstroke="[^"]*"/gi, '')
+        .replace(/\scolor="[^"]*"/gi, '');
+
+      return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="${escapeAttribute(
+        fill,
+      )}" color="${escapeAttribute(fill)}" stroke="none">
+      ${forcedMarkup}
+    </g>`;
+    }
+
+    if (isSvgSource && field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
+      const scaleX = field.width / field.vectorWidth;
+      const scaleY = field.height / field.vectorHeight;
+
+      return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" stroke="none">
+      ${field.vectorMarkup}
+    </g>`;
+    }
+
+    return `<image
     x="${field.x}"
     y="${field.y}"
     width="${field.width}"
@@ -359,31 +387,7 @@ function logoToSvg(
     href="${escapeAttribute(imageSrc)}"
     xlink:href="${escapeAttribute(imageSrc)}"
   />`;
-}
-
-  if (isSvgSource && field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
-  const scaleX = field.width / field.vectorWidth;
-  const scaleY = field.height / field.vectorHeight;
-
-  return `<g
-    transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    ${field.vectorMarkup}
-  </g>`;
-}
-
-  return `<image
-    x="${field.x}"
-    y="${field.y}"
-    width="${field.width}"
-    height="${field.height}"
-    preserveAspectRatio="xMidYMid meet"
-    href="${escapeAttribute(imageSrc)}"
-    xlink:href="${escapeAttribute(imageSrc)}"
-  />`;
-}
+  }
 
   if (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight) {
     throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
@@ -423,7 +427,7 @@ async function prepareFieldsForExport(
 ): Promise<PreparedField[]> {
   return Promise.all(
     ensureBlackText(fields, outputMode).map(async (field) => {
-            if (field.type === 'logo') {
+      if (field.type === 'logo') {
         if (
           outputMode === 'uv' &&
           field.label === 'NFC Symbol' &&
