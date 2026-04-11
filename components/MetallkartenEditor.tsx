@@ -313,27 +313,20 @@ function textToSvg(field: TextField) {
 }
 
 function qrSvgGroup(field: PreparedQrField, outputMode: OutputMode) {
-  const qrMatrix =
-    field.qrMatrix && field.qrMatrix.length > 0
-      ? field.qrMatrix
-      : fallbackQrMatrix(field.text || 'placeholder');
+  const stroke = outputMode === 'uv' ? field.color || '#000000' : '#000000';
 
-  const moduleSize = field.size / qrMatrix.length;
-  const { offset, size } = getQrModuleRect(moduleSize);
-
-  const fill = outputMode === 'uv' ? field.color || '#000000' : '#000000';
-  const bg = outputMode === 'uv' ? field.backgroundColor || '#ffffff' : '#ffffff';
-
-  let rects = `<rect x="${field.x}" y="${field.y}" width="${field.size}" height="${field.size}" fill="${bg}" rx="8" />`;
-
-  qrMatrix.forEach((row, y) => {
-    row.forEach((cell, x) => {
-      if (!cell) return;
-      rects += `<rect x="${field.x + x * moduleSize + offset}" y="${field.y + y * moduleSize + offset}" width="${size}" height="${size}" fill="${fill}" shape-rendering="crispEdges" />`;
-    });
-  });
-
-  return rects;
+  return `
+    <rect
+      x="${field.x}"
+      y="${field.y}"
+      width="${field.size}"
+      height="${field.size}"
+      rx="8"
+      fill="none"
+      stroke="${stroke}"
+      stroke-width="1"
+    />
+  `;
 }
 
 function logoToSvg(
