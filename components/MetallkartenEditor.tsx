@@ -2314,14 +2314,17 @@ updateField(selected.id, {
           return isBackQr ? card.showBackQr : true;
         });
 
-        const [preparedFront, preparedBack] = await Promise.all([
-  prepareFieldsForExport(visibleFrontFields, outputMode),
-  prepareFieldsForExport(visibleBackFields, outputMode),
+        const frontExportMode: OutputMode = outputMode === 'laser' ? 'laser' : 'uv';
+const backExportMode: OutputMode = 'uv';
+
+const [preparedFront, preparedBack] = await Promise.all([
+  prepareFieldsForExport(visibleFrontFields, frontExportMode),
+  prepareFieldsForExport(visibleBackFields, backExportMode),
 ]);
 
        const safeCardName = sanitizeOrderNumber(card.name) || 'metallkarte';
 
-const frontSvg = await exportSideSvg(
+  const frontSvg = await exportSideSvg(
   preparedFront,
   false,
   {
@@ -2330,7 +2333,7 @@ const frontSvg = await exportSideSvg(
     cardName: card.name,
     cardFinish: card.cardFinish,
   },
-  outputMode,
+  frontExportMode,
   {
     cardWidth: CARD_WIDTH,
     cardHeight: CARD_HEIGHT,
@@ -2349,7 +2352,7 @@ const backSvg = await exportSideSvg(
     cardName: card.name,
     cardFinish: card.cardFinish,
   },
-  outputMode,
+  backExportMode,
   {
     cardWidth: CARD_WIDTH,
     cardHeight: CARD_HEIGHT,
@@ -2359,17 +2362,22 @@ const backSvg = await exportSideSvg(
   },
 );
 
-if (
-  outputMode === 'laser' &&
-  (frontSvg.includes('<image') || backSvg.includes('<image'))
-) {
+if (frontExportMode === 'laser' && frontSvg.includes('<image')) {
   throw new Error(
-    'Export enthält noch Rasterbilder (<image>). Bitte alle Logos/Screenshots vollständig vektorisieren.',
+    'Export enthält noch Rasterbilder (<image>) auf der Vorderseite. Bitte alle Logos/Screenshots vollständig vektorisieren.',
   );
 }
 
-zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-vorderseite-${outputMode}.svg`, frontSvg);
-zip.file(`${rootFolder}/${safeCardName}/${safeCardName}-rueckseite-${outputMode}.svg`, backSvg);
+zip.file(
+  `${rootFolder}/${safeCardName}/${safeCardName}-vorderseite-${frontExportMode}.svg`,
+  frontSvg,
+);
+
+zip.file(
+  `${rootFolder}/${safeCardName}/${safeCardName}-rueckseite-${backExportMode}.svg`,
+  backSvg,
+);
+
       }
 
       const blob = await zip.generateAsync({ type: 'blob' });
