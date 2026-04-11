@@ -486,7 +486,7 @@ async function exportSideSvg(
   },
 ) {
   const { cardWidth, cardHeight, stageW, stageH, safeMargin } = dimensions;
-
+  
   const content = (
   await Promise.all(
     fields.map(async (field) => {
@@ -507,6 +507,18 @@ async function exportSideSvg(
     `
     : '';
 
+  const outline = `
+    <rect
+      x="0"
+      y="0"
+      width="${stageW}"
+      height="${stageH}"
+      fill="none"
+      stroke="#000000"
+      stroke-width="0.3"
+    />
+  `;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${cardWidth}mm" height="${cardHeight}mm"
@@ -521,6 +533,7 @@ async function exportSideSvg(
     {"orderNumber":"${escapeXml(meta.orderNumber)}","side":"${escapeXml(meta.side)}"}
   </metadata>
   ${guide}
+  ${outline}
   ${content}
 </svg>`;
 }
