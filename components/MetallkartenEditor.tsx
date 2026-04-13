@@ -341,6 +341,7 @@ function qrSvgGroup(field: PreparedQrField, outputMode: OutputMode) {
   `;
 }
 
+// NACHHER - Die korrigierte Version
 function logoToSvg(
   field: LogoField,
   outputMode: OutputMode,
@@ -358,8 +359,6 @@ function logoToSvg(
       field.vectorWidth &&
       field.vectorHeight
     ) {
-      const scaleX = field.width / field.vectorWidth;
-      const scaleY = field.height / field.vectorHeight;
       const fill = field.color || '#000000';
 
       const forcedMarkup = field.vectorMarkup
@@ -367,20 +366,17 @@ function logoToSvg(
         .replace(/\sstroke="[^"]*"/gi, '')
         .replace(/\scolor="[^"]*"/gi, '');
 
-      return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="${escapeAttribute(
-        fill,
-      )}" color="${escapeAttribute(fill)}" stroke="none">
+      // KORREKTUR: Wir nutzen <svg> mit preserveAspectRatio anstatt einer starren Skalierung
+      return `<svg x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" viewBox="0 0 ${field.vectorWidth} ${field.vectorHeight}" preserveAspectRatio="xMidYMid meet" fill="${escapeAttribute(fill)}" color="${escapeAttribute(fill)}" stroke="none">
       ${forcedMarkup}
-    </g>`;
+    </svg>`;
     }
 
     if (isSvgSource && field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
-      const scaleX = field.width / field.vectorWidth;
-      const scaleY = field.height / field.vectorHeight;
-
-      return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" stroke="none">
+      // KORREKTUR: Auch hier nutzen wir <svg> um Verzerrungen im UV-Vektormodus zu verhindern
+      return `<svg x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" viewBox="0 0 ${field.vectorWidth} ${field.vectorHeight}" preserveAspectRatio="xMidYMid meet" stroke="none">
       ${field.vectorMarkup}
-    </g>`;
+    </svg>`;
     }
 
     return `<image
@@ -398,12 +394,11 @@ function logoToSvg(
     throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
   }
 
-  const scaleX = field.width / field.vectorWidth;
-  const scaleY = field.height / field.vectorHeight;
-
-  return `<g transform="translate(${field.x} ${field.y}) scale(${scaleX} ${scaleY})" fill="#000000" color="#000000" stroke="none">
+  // KORREKTUR: WICHTIGSTE STELLE FÜR DEN LASERMODUS
+  // Hier wird das Logo nun ohne jede Verzerrung exportiert
+  return `<svg x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" viewBox="0 0 ${field.vectorWidth} ${field.vectorHeight}" preserveAspectRatio="xMidYMid meet" fill="#000000" color="#000000" stroke="none">
   ${field.vectorMarkup}
-</g>`;
+</svg>`;
 }
 
 function ensureBlackText(fields: Field[], outputMode: OutputMode) {
