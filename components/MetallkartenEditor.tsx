@@ -77,7 +77,7 @@ function getLaserColor(cardFinish: CardFinishKey, side: Side) {
   }
 
   if (cardFinish === 'black') {
-    return side === 'front' ? '#d1d5db' : '#c97a2b';
+    return side === 'front' ? '#d1d5db' : '#e0e0e0';
   }
 
   if (cardFinish === 'gold') {
