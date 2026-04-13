@@ -342,11 +342,13 @@ function qrSvgGroup(field: PreparedQrField, outputMode: OutputMode) {
 }
 
 // NACHHER - Die korrigierte Version
+// NACHHER - Die finale, korrigierte Version
 function logoToSvg(
   field: LogoField,
   outputMode: OutputMode,
   cardFinish?: CardFinishKey,
 ) {
+  // --- UV-Modus (bereits funktionsfähig) ---
   if (outputMode === 'uv') {
     const imageSrc = field.exportSrc || field.originalSrc || field.src;
     const isSvgSource =
@@ -360,45 +362,68 @@ function logoToSvg(
       field.vectorHeight
     ) {
       const fill = field.color || '#000000';
-
       const forcedMarkup = field.vectorMarkup
         .replace(/\sfill="[^"]*"/gi, '')
         .replace(/\sstroke="[^"]*"/gi, '')
         .replace(/\scolor="[^"]*"/gi, '');
 
-      // KORREKTUR: Wir nutzen <svg> mit preserveAspectRatio anstatt einer starren Skalierung
       return `<svg x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" viewBox="0 0 ${field.vectorWidth} ${field.vectorHeight}" preserveAspectRatio="xMidYMid meet" fill="${escapeAttribute(fill)}" color="${escapeAttribute(fill)}" stroke="none">
-      ${forcedMarkup}
-    </svg>`;
+        ${forcedMarkup}
+      </svg>`;
     }
 
     if (isSvgSource && field.vectorMarkup && field.vectorWidth && field.vectorHeight) {
-      // KORREKTUR: Auch hier nutzen wir <svg> um Verzerrungen im UV-Vektormodus zu verhindern
       return `<svg x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" viewBox="0 0 ${field.vectorWidth} ${field.vectorHeight}" preserveAspectRatio="xMidYMid meet" stroke="none">
-      ${field.vectorMarkup}
-    </svg>`;
+        ${field.vectorMarkup}
+      </svg>`;
     }
 
     return `<image
-    x="${field.x}"
-    y="${field.y}"
-    width="${field.width}"
-    height="${field.height}"
-    preserveAspectRatio="xMidYMid meet"
-    href="${escapeAttribute(imageSrc)}"
-    xlink:href="${escapeAttribute(imageSrc)}"
-  />`;
+      x="${field.x}"
+      y="${field.y}"
+      width="${field.width}"
+      height="${field.height}"
+      preserveAspectRatio="xMidYMid meet"
+      href="${escapeAttribute(imageSrc)}"
+      xlink:href="${escapeAttribute(imageSrc)}"
+    />`;
   }
 
+  // --- Laser-Modus (hier war der Fehler) ---
   if (!field.vectorMarkup || !field.vectorWidth || !field.vectorHeight) {
     throw new Error(`Logo "${field.label}" ist nicht vektorisiert und darf nicht als Bild exportiert werden.`);
   }
 
-  // KORREKTUR: WICHTIGSTE STELLE FÜR DEN LASERMODUS
-  // Hier wird das Logo nun ohne jede Verzerrung exportiert
-  return `<svg x="${field.x}" y="${field.y}" width="${field.width}" height="${field.height}" viewBox="0 0 ${field.vectorWidth} ${field.vectorHeight}" preserveAspectRatio="xMidYMid meet" fill="#000000" color="#000000" stroke="none">
-  ${field.vectorMarkup}
-</svg>`;
+  // NEU: Manuelle Berechnung der proportionalen Skalierung und Zentrierung
+  const w = field.width;
+  const h = field.height;
+  const vw = field.vectorWidth;
+  const vh = field.vectorHeight;
+
+  // 1. Berechne die Skalierungsfaktoren für beide Achsen
+  const scaleX = w / vw;
+  const scaleY = h / vh;
+
+  // 2. Wähle den KLEINEREN Faktor, um sicherzustellen, dass das Logo komplett reinpasst, ohne sich zu verzerren.
+  const scale = Math.min(scaleX, scaleY);
+
+  // 3. Berechne die neuen, skalierten Dimensionen
+  const newWidth = vw * scale;
+  const newHeight = vh * scale;
+
+  // 4. Berechne den Versatz (Offset), um das Logo innerhalb seines Rahmens zu zentrieren.
+  const offsetX = (w - newWidth) / 2;
+  const offsetY = (h - newHeight) / 2;
+
+  // 5. Die finale Position ist die Feld-Position plus der Zentrierungs-Offset.
+  const finalX = field.x + offsetX;
+  const finalY = field.y + offsetY;
+
+  // 6. Setze alles in einem <g>-Element mit einer transform-Anweisung zusammen.
+  // Es wird nur noch EINMAL skaliert, und zwar proportional.
+  return `<g transform="translate(${finalX} ${finalY}) scale(${scale})" fill="#000000" color="#000000" stroke="none">
+    ${field.vectorMarkup}
+  </g>`;
 }
 
 function ensureBlackText(fields: Field[], outputMode: OutputMode) {
