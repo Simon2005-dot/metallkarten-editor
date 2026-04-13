@@ -161,28 +161,40 @@ function getUvExportFont(fontFamily: FontFamilyKey) {
   return uvExportFontPromises.get(fontUrl)!;
 }
 
+// NACHHER - Die korrigierte Version
 async function textToSvgPath(field: TextField, outputMode: OutputMode) {
-  if (outputMode !== 'uv') {
-    return textToSvg(field);
-  }
-
+  // WICHTIG: Die Weiterleitung zu textToSvg wird entfernt.
+  // Diese Funktion wird jetzt für BEIDE Modi (laser und uv) verwendet.
+  
   const font = await getUvExportFont(field.fontFamily);
   const lines = String(field.text || '').split('\n');
-  const fill = field.color || DEFAULT_TEXT_COLOR;
+  
+  // Im Lasermodus muss die Füllfarbe immer schwarz sein.
+  const fill = outputMode === 'uv' ? (field.color || DEFAULT_TEXT_COLOR) : '#000000';
+
+  // KORREKTUR-SCHRITT 1: Finde die längste Zeile, um die Gesamtbreite des Textfeldes zu bestimmen.
+  // Das ist notwendig, um andere Zeilen relativ dazu korrekt auszurichten.
+  const longestLine = lines.reduce((a, b) => (a.length > b.length ? a : b), '');
+  const fullFieldWidth = font.getAdvanceWidth(longestLine, field.fontSize);
 
   return lines
     .map((line, index) => {
       const y = field.y + index * (field.fontSize * 1.35) + field.fontSize;
+      
+      let x = field.x; // Die Basis-Position ist immer die linke Kante, genau wie in der Vorschau.
 
-      let x = field.x;
+      // KORREKTUR-SCHRITT 2: Berechne die x-Position basierend auf der Gesamtbreite.
       if (field.align === 'center') {
-        const width = font.getAdvanceWidth(line, field.fontSize);
-        x = field.x - width / 2;
+        const currentLineWidth = font.getAdvanceWidth(line, field.fontSize);
+        // Positioniere die Zeile zentriert innerhalb der Gesamtbreite
+        x = field.x + (fullFieldWidth - currentLineWidth) / 2;
       } else if (field.align === 'right') {
-        const width = font.getAdvanceWidth(line, field.fontSize);
-        x = field.x - width;
+        const currentLineWidth = font.getAdvanceWidth(line, field.fontSize);
+        // Positioniere die Zeile rechtsbündig innerhalb der Gesamtbreite
+        x = field.x + (fullFieldWidth - currentLineWidth);
       }
-
+      
+      // Der Rest bleibt gleich
       const path = font.getPath(line, x, y, field.fontSize);
       const d = path.toPathData(2);
 
